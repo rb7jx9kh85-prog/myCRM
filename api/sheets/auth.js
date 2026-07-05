@@ -1,4 +1,4 @@
-import { getOAuthClient } from "./_googleClient";
+import { getOAuthClient } from "./_googleClient.js";
 
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 

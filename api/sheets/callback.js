@@ -1,5 +1,5 @@
 import { google } from "googleapis";
-import { getOAuthClient, saveIntegrationDoc, getStoredTokens } from "./_googleClient";
+import { getOAuthClient, saveIntegrationDoc, getStoredTokens } from "./_googleClient.js";
 
 const HEADER_ROW = [
   "ID",

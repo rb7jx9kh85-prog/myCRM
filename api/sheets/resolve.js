@@ -1,7 +1,7 @@
 import { google } from "googleapis";
-import { getAuthorizedClient, getStoredTokens, saveIntegrationDoc } from "./_googleClient";
-import { getAdminDb } from "../_firebaseAdmin";
-import { PIPELINE_STATUSES } from "../../src/config/pipeline";
+import { getAuthorizedClient, getStoredTokens, saveIntegrationDoc } from "./_googleClient.js";
+import { getAdminDb } from "../_firebaseAdmin.js";
+import { PIPELINE_STATUSES } from "../../src/config/pipeline.js";
 
 function statusIdFromLabel(label) {
   return PIPELINE_STATUSES.find((s) => s.label === label)?.id;

@@ -1,7 +1,7 @@
 // Enrichissement IA des prospects trouvés via Geoapify — appelle OpenAI
 // avec un system prompt hyper détaillé sur AWC et ton ICP (voir
 // src/config/icpProfile.js). La clé OPENAI_API_KEY reste côté serveur.
-import { buildSystemPrompt } from "../../src/config/icpProfile";
+import { buildSystemPrompt } from "../../src/config/icpProfile.js";
 
 const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
