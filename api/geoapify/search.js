@@ -52,6 +52,7 @@ export default async function handler(req, res) {
         address: p.formatted || "",
         phone: p.contact?.phone || "",
         website: p.website || p.contact?.website || "",
+        category: (p.categories || []).join(", "),
       };
     });
 

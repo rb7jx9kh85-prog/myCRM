@@ -31,6 +31,8 @@ pas secrète en soi, mais les clés Geoapify/Google/Firebase Admin le sont.
 | `GEOAPIFY_API_KEY` | Ta clé Geoapify existante | **Oui** |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google Cloud Console → APIs & Services → Identifiants → Client OAuth 2.0 (type "Application Web"), redirect URI = `https://<ton-domaine-vercel>/api/sheets/callback` | **Oui** (le secret) |
 | `CRON_SECRET` | Choisis une chaîne aléatoire toi-même | **Oui** |
+| `OPENAI_API_KEY` | Ta clé OpenAI existante | **Oui** |
+| `OPENAI_MODEL` | Optionnel, défaut `gpt-4o-mini` — change si tu préfères un autre modèle | Non |
 
 Après avoir tout ajouté : redéploie le projet pour que les variables soient prises en compte.
 
@@ -97,6 +99,24 @@ Tout est centralisé dans `src/config/notificationTriggers.js` :
 
 Ces deux fichiers sont volontairement séparés de la logique de calcul
 (`src/lib/scoring.js`) pour rester modifiables sans toucher au reste de l'app.
+
+## Enrichissement IA (OpenAI)
+
+Sur l'écran Recherche, après une recherche Geoapify, le bouton "Enrichir
+avec l'IA" envoie les résultats à `api/enrich/analyze.js`, qui appelle
+OpenAI avec un system prompt construit à partir de `src/config/icpProfile.js`
+— ce fichier contient l'intégralité de ton document ICP (client idéal,
+signaux positifs, red flags, pain points, offres, budgets, cantons
+prioritaires). Modifie ce fichier si tes critères évoluent, aucune autre
+partie du code à toucher.
+
+L'IA ne voit que les données factuelles disponibles (nom, type, adresse,
+téléphone, présence d'un site) — elle ne peut pas juger les avis Google, la
+qualité des photos ou l'activité Instagram, et renvoie explicitement "à
+vérifier manuellement" sur ces points plutôt que d'inventer une réponse.
+Chaque résultat reçoit un badge (Recommandé / À vérifier / À exclure) et un
+raisonnement consultable au survol ; à l'import, les red flags et besoins
+détectés pré-remplissent la fiche prospect (tout reste modifiable).
 
 ## Développement local
 

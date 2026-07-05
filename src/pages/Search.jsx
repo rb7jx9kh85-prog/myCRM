@@ -2,12 +2,20 @@ import { useState } from "react";
 import { createProspect } from "../lib/prospects";
 import { CANTONS, ESTABLISHMENT_TYPE_OPTIONS } from "../config/pipeline";
 
+const VERDICT_LABELS = {
+  prospect_valide: { label: "Recommandé", cls: "success" },
+  a_verifier: { label: "À vérifier", cls: "neutral" },
+  exclure: { label: "À exclure", cls: "danger" },
+};
+
 export default function Search() {
   const [canton, setCanton] = useState("Valais");
   const [type, setType] = useState("restaurant");
   const [radiusKm, setRadiusKm] = useState(15);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [enriching, setEnriching] = useState(false);
+  const [enrichError, setEnrichError] = useState("");
   const [imported, setImported] = useState({});
 
   async function handleSearch(e) {
@@ -24,7 +32,34 @@ export default function Search() {
     }
   }
 
+  async function handleEnrich() {
+    setEnriching(true);
+    setEnrichError("");
+    try {
+      const candidates = results.map((r) => ({ ...r, type }));
+      const res = await fetch("/api/enrich/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidates }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setEnrichError(data.error);
+        return;
+      }
+      setResults((prev) => prev.map((r, i) => {
+        const match = data.results.find((x) => x.index === i);
+        return match ? { ...r, ai: match } : r;
+      }));
+    } catch {
+      setEnrichError("Échec de l'enrichissement IA.");
+    } finally {
+      setEnriching(false);
+    }
+  }
+
   async function handleImport(place) {
+    const ai = place.ai;
     await createProspect({
       name: place.name,
       type,
@@ -34,11 +69,15 @@ export default function Search() {
       phone: place.phone || "",
       website: place.website || "",
       pipelineStatus: "a_contacter",
-      criteria: { noWebsite: !place.website },
-      needsReservation: false,
+      criteria: {
+        noWebsite: !place.website,
+        ...(ai?.redFlags ? Object.fromEntries(ai.redFlags.map((f) => [f, true])) : {}),
+        ...(ai?.suggestedCriteria?.localPme != null ? { localPme: ai.suggestedCriteria.localPme } : {}),
+      },
+      needsReservation: ai?.suggestedNeedsReservation ?? false,
       strongVisualIdentity: false,
       multiLocation: false,
-      notes: "",
+      notes: ai?.reasoning ? `IA : ${ai.reasoning}` : "",
     });
     setImported((s) => ({ ...s, [place.id]: true }));
   }
@@ -67,13 +106,26 @@ export default function Search() {
         <button className="primary" type="submit" disabled={loading}>{loading ? "Recherche..." : "Rechercher"}</button>
       </form>
 
-      <div className="card" style={{ marginTop: 16 }}>
+      {results.length > 0 && (
+        <div style={{ margin: "12px 0", display: "flex", alignItems: "center", gap: 10 }}>
+          <button onClick={handleEnrich} disabled={enriching}>
+            {enriching ? "Analyse IA en cours..." : "Enrichir avec l'IA"}
+          </button>
+          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
+            Vérifie l'adéquation avec ton ICP à partir des données disponibles (avis Google, photos, Instagram restent à vérifier manuellement).
+          </span>
+          {enrichError && <span style={{ fontSize: 13, color: "var(--danger)" }}>{enrichError}</span>}
+        </div>
+      )}
+
+      <div className="card" style={{ marginTop: 8 }}>
         <table>
           <thead>
             <tr>
               <th>Nom</th>
               <th>Ville</th>
               <th>Site web</th>
+              <th>Avis IA</th>
               <th></th>
             </tr>
           </thead>
@@ -84,6 +136,15 @@ export default function Search() {
                 <td>{r.city}</td>
                 <td>{r.website ? <a href={r.website} target="_blank" rel="noreferrer">lien</a> : <span className="badge success">Pas de site (+30)</span>}</td>
                 <td>
+                  {r.ai ? (
+                    <span className={`badge ${VERDICT_LABELS[r.ai.verdict]?.cls || "neutral"}`} title={r.ai.reasoning}>
+                      {VERDICT_LABELS[r.ai.verdict]?.label || r.ai.verdict}
+                    </span>
+                  ) : (
+                    <span style={{ color: "var(--text-muted)", fontSize: 13 }}>—</span>
+                  )}
+                </td>
+                <td>
                   <button className="primary" disabled={imported[r.id]} onClick={() => handleImport(r)}>
                     {imported[r.id] ? "Importé" : "Importer"}
                   </button>
@@ -91,7 +152,7 @@ export default function Search() {
               </tr>
             ))}
             {results.length === 0 && !loading && (
-              <tr><td colSpan={4} style={{ color: "var(--text-muted)" }}>Lance une recherche pour voir des résultats.</td></tr>
+              <tr><td colSpan={5} style={{ color: "var(--text-muted)" }}>Lance une recherche pour voir des résultats.</td></tr>
             )}
           </tbody>
         </table>
