@@ -8,6 +8,7 @@ const LINKS = [
   { to: "/cold-call", label: "Cold call" },
   { to: "/planning", label: "Planning" },
   { to: "/suggestions", label: "Suggestions" },
+  { to: "/taches", label: "Tâches" },
   { to: "/reglages", label: "Réglages" },
 ];
 

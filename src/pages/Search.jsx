@@ -27,11 +27,37 @@ export default function Search() {
       const params = new URLSearchParams({ canton, type, radiusKm });
       const res = await fetch(`/api/geoapify/search?${params}`);
       const data = await res.json();
-      const found = data.results || [];
+      let found = data.results || [];
+      found = await enrichMissingPhones(found);
       setResults(found);
       if (found.length) await runEnrich(found);
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Complète téléphone/site web manquants via Geoapify Place Details (même
+  // clé, pas de coût IA) avant l'analyse IA — uniquement pour les fiches
+  // incomplètes, en un seul appel groupé.
+  async function enrichMissingPhones(list) {
+    const missing = list.filter((r) => !r.phone);
+    if (!missing.length) return list;
+    try {
+      const res = await fetch("/api/geoapify/place-details", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: missing.map((r) => r.id) }),
+      });
+      const data = await res.json();
+      if (data.error || !data.results) return list;
+      const byId = Object.fromEntries(data.results.map((r) => [r.id, r]));
+      return list.map((r) => {
+        const found = byId[r.id];
+        if (!found) return r;
+        return { ...r, phone: r.phone || found.phone || "", website: r.website || found.website || "" };
+      });
+    } catch {
+      return list;
     }
   }
 
@@ -76,6 +102,7 @@ export default function Search() {
       address: place.address || "",
       phone: place.phone || "",
       website: place.website || "",
+      geoapifyPlaceId: place.id || null,
       pipelineStatus: "a_contacter",
       criteria: {
         noWebsite: !place.website,
@@ -150,6 +177,7 @@ export default function Search() {
             <tr>
               <th>Nom</th>
               <th>Ville</th>
+              <th>Téléphone</th>
               <th>Site web</th>
               <th>Avis IA</th>
               <th>Offre suggérée</th>
@@ -161,6 +189,7 @@ export default function Search() {
               <tr key={r.id}>
                 <td>{r.name}</td>
                 <td>{r.city}</td>
+                <td>{r.phone || <span style={{ color: "var(--text-muted)", fontSize: 13 }}>—</span>}</td>
                 <td>{r.website ? <a href={r.website} target="_blank" rel="noreferrer">lien</a> : <span className="badge success">Pas de site (+30)</span>}</td>
                 <td>
                   {r.ai ? (
@@ -182,7 +211,7 @@ export default function Search() {
               </tr>
             ))}
             {results.length === 0 && !loading && (
-              <tr><td colSpan={6} style={{ color: "var(--text-muted)" }}>Lance une recherche pour voir des résultats.</td></tr>
+              <tr><td colSpan={7} style={{ color: "var(--text-muted)" }}>Lance une recherche pour voir des résultats.</td></tr>
             )}
           </tbody>
         </table>

@@ -2,14 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { subscribeProspects } from "../lib/prospects";
 import { subscribeSessions } from "../lib/sessions";
+import { subscribeTasks } from "../lib/tasks";
 import { PIPELINE_STATUSES } from "../config/pipeline";
 
 export default function Dashboard() {
   const [prospects, setProspects] = useState([]);
   const [sessions, setSessions] = useState([]);
+  const [tasks, setTasks] = useState([]);
 
   useEffect(() => subscribeProspects(setProspects), []);
   useEffect(() => subscribeSessions(setSessions), []);
+  useEffect(() => subscribeTasks(setTasks), []);
 
   const counts = useMemo(() => {
     const c = Object.fromEntries(PIPELINE_STATUSES.map((s) => [s.id, 0]));
@@ -24,6 +27,10 @@ export default function Dashboard() {
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const upcomingSessions = sessions.filter((s) => s.status === "planned" && s.date >= todayStr).slice(0, 5);
+
+  const pendingTasks = useMemo(() => tasks.filter((t) => !t.done), [tasks]);
+  const overdueTasks = pendingTasks.filter((t) => t.dueDate && t.dueDate < todayStr);
+  const dueTodayTasks = pendingTasks.filter((t) => t.dueDate === todayStr);
 
   return (
     <div>
@@ -57,6 +64,22 @@ export default function Dashboard() {
             </div>
           ))}
           {upcomingSessions.length === 0 && <p style={{ color: "var(--text-muted)" }}>Aucune session planifiée. <Link to="/planning">Planifier</Link></p>}
+        </div>
+
+        <div className="card" style={{ flex: 1, minWidth: 280 }}>
+          <h3 style={{ marginTop: 0 }}>Tâches</h3>
+          <p style={{ margin: "0 0 8px" }}>
+            <span className="badge danger">{overdueTasks.length} en retard</span>{" "}
+            <span className="badge neutral">{dueTodayTasks.length} aujourd'hui</span>{" "}
+            <span className="badge neutral">{pendingTasks.length} au total</span>
+          </p>
+          {[...overdueTasks, ...dueTodayTasks].slice(0, 5).map((t) => (
+            <div key={t.id} style={{ padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
+              {t.title}{t.dueDate && ` — ${t.dueDate}`}
+            </div>
+          ))}
+          {pendingTasks.length === 0 && <p style={{ color: "var(--text-muted)" }}>Aucune tâche en attente.</p>}
+          <Link to="/taches">Voir toutes les tâches</Link>
         </div>
       </div>
     </div>

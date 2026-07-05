@@ -148,6 +148,28 @@ le profil ICP (`src/config/icpProfile.js`) — et génère une phrase d'accroche
 directement dans la vue "Cold call" pendant l'appel. Rien n'est créé tant que
 tu ne cliques pas "Créer cette session".
 
+## Enrichissement des numéros de téléphone (Geoapify, sans coût IA)
+
+Sur l'écran Recherche, les fiches sans téléphone sont automatiquement
+complétées après chaque recherche via l'API Geoapify Place Details
+(`api/geoapify/place-details.js`) — même clé `GEOAPIFY_API_KEY`, pas
+d'appel IA. À l'import, l'identifiant Geoapify (`geoapifyPlaceId`) est
+conservé sur le prospect ; le bouton "Enrichir les numéros de téléphone" sur
+l'écran Prospects permet de relancer la recherche plus tard pour les
+prospects encore sans numéro (ne fonctionne que pour les prospects importés
+après l'ajout de cette fonctionnalité, faute d'identifiant Geoapify stocké
+avant).
+
+## Gestion des tâches
+
+Écran "Tâches" : liste de tâches libres (titre, échéance optionnelle, lien
+optionnel vers un prospect), indépendante des sessions de cold call —
+groupées par échéance (en retard / aujourd'hui / à venir / sans échéance).
+Un résumé (en retard, dues aujourd'hui, total) apparaît sur le tableau de
+bord. Chaque fiche prospect affiche aussi ses tâches liées avec ajout rapide
+(`src/components/ProspectTasks.jsx`). Collection Firestore `tasks`, couverte
+par la même règle de sécurité que le reste (`firestore.rules`).
+
 ## Développement local
 
 ```bash

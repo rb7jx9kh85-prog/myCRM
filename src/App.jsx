@@ -9,6 +9,7 @@ import Search from "./pages/Search";
 import ColdCall from "./pages/ColdCall";
 import Planning from "./pages/Planning";
 import Suggestions from "./pages/Suggestions";
+import Tasks from "./pages/Tasks";
 import Settings from "./pages/Settings";
 
 function PrivateRoutes() {
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="/cold-call" element={<ColdCall />} />
             <Route path="/planning" element={<Planning />} />
             <Route path="/suggestions" element={<Suggestions />} />
+            <Route path="/taches" element={<Tasks />} />
             <Route path="/reglages" element={<Settings />} />
           </Route>
         </Routes>

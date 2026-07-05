@@ -17,8 +17,45 @@ export default function Prospects() {
   const [showExcluded, setShowExcluded] = useState(false);
   const [checkingWebsites, setCheckingWebsites] = useState(false);
   const [websiteCheckStatus, setWebsiteCheckStatus] = useState("");
+  const [checkingPhones, setCheckingPhones] = useState(false);
+  const [phoneCheckStatus, setPhoneCheckStatus] = useState("");
 
   useEffect(() => subscribeProspects(setProspects), []);
+
+  async function handleEnrichPhones() {
+    const toCheck = prospects.filter((p) => !p.phone && p.geoapifyPlaceId);
+    if (toCheck.length === 0) {
+      setPhoneCheckStatus("Aucun numéro manquant à compléter (ou prospect importé avant cette fonctionnalité).");
+      return;
+    }
+    setCheckingPhones(true);
+    setPhoneCheckStatus(`Recherche de ${toCheck.length} numéro(s) en cours...`);
+    try {
+      const res = await fetch("/api/geoapify/place-details", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: toCheck.map((p) => p.geoapifyPlaceId) }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setPhoneCheckStatus(data.error);
+        return;
+      }
+      let found = 0;
+      for (const result of data.results) {
+        if (!result.phone) continue;
+        const prospect = toCheck.find((p) => p.geoapifyPlaceId === result.id);
+        if (!prospect) continue;
+        await updateProspect(prospect.id, { ...prospect, phone: result.phone, website: prospect.website || result.website || "" });
+        found++;
+      }
+      setPhoneCheckStatus(`${found} numéro(s) trouvé(s) sur ${toCheck.length} recherché(s).`);
+    } catch {
+      setPhoneCheckStatus("Échec de la recherche des numéros.");
+    } finally {
+      setCheckingPhones(false);
+    }
+  }
 
   async function handleCheckWebsites() {
     const toCheck = prospects.filter((p) => p.website && !p.websiteCheck);
@@ -91,10 +128,14 @@ export default function Prospects() {
           <input type="checkbox" style={{ width: "auto" }} checked={showExcluded} onChange={(e) => setShowExcluded(e.target.checked)} />
           Afficher les exclus
         </label>
-        <button onClick={handleCheckWebsites} disabled={checkingWebsites} style={{ marginLeft: "auto" }}>
+        <button onClick={handleEnrichPhones} disabled={checkingPhones} style={{ marginLeft: "auto" }}>
+          {checkingPhones ? "Recherche..." : "Enrichir les numéros de téléphone"}
+        </button>
+        <button onClick={handleCheckWebsites} disabled={checkingWebsites}>
           {checkingWebsites ? "Vérification..." : "Vérifier les sites web"}
         </button>
       </div>
+      {phoneCheckStatus && <p style={{ fontSize: 13, marginTop: -8 }}>{phoneCheckStatus}</p>}
       {websiteCheckStatus && <p style={{ fontSize: 13, marginTop: -8 }}>{websiteCheckStatus}</p>}
 
       <div className="card">
@@ -104,6 +145,7 @@ export default function Prospects() {
               <th>Nom</th>
               <th>Type</th>
               <th>Ville</th>
+              <th>Téléphone</th>
               <th>Score</th>
               <th>Site web</th>
               <th>Prestation</th>
@@ -116,6 +158,7 @@ export default function Prospects() {
                 <td><Link to={`/prospects/${p.id}`}>{p.name}</Link></td>
                 <td>{ESTABLISHMENT_TYPE_OPTIONS.find((t) => t.id === p.type)?.label || p.type}</td>
                 <td>{p.city}</td>
+                <td>{p.phone || <span style={{ color: "var(--text-muted)", fontSize: 13 }}>—</span>}</td>
                 <td><ScoreBadge score={p.scoreTotal} redFlags={p.redFlags} autoExcluded={p.autoExcluded} /></td>
                 <td>
                   {!p.website ? (
@@ -133,7 +176,7 @@ export default function Prospects() {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={7} style={{ color: "var(--text-muted)" }}>Aucun prospect.</td></tr>
+              <tr><td colSpan={8} style={{ color: "var(--text-muted)" }}>Aucun prospect.</td></tr>
             )}
           </tbody>
         </table>
