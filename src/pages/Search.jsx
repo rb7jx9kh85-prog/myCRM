@@ -17,6 +17,7 @@ export default function Search() {
   const [enriching, setEnriching] = useState(false);
   const [enrichError, setEnrichError] = useState("");
   const [imported, setImported] = useState({});
+  const [importingAll, setImportingAll] = useState(false);
 
   async function handleSearch(e) {
     e.preventDefault();
@@ -26,17 +27,21 @@ export default function Search() {
       const params = new URLSearchParams({ canton, type, radiusKm });
       const res = await fetch(`/api/geoapify/search?${params}`);
       const data = await res.json();
-      setResults(data.results || []);
+      const found = data.results || [];
+      setResults(found);
+      if (found.length) await runEnrich(found);
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleEnrich() {
+  // Ciblage automatique : appelée juste après la recherche (plus besoin de
+  // cliquer manuellement) et réutilisable pour ré-analyser après un changement.
+  async function runEnrich(list) {
     setEnriching(true);
     setEnrichError("");
     try {
-      const candidates = results.map((r) => ({ ...r, type }));
+      const candidates = list.map((r) => ({ ...r, type }));
       const res = await fetch("/api/enrich/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -60,6 +65,9 @@ export default function Search() {
 
   async function handleImport(place) {
     const ai = place.ai;
+    const suggestedCriteria = ai?.suggestedCriteria
+      ? Object.fromEntries(Object.entries(ai.suggestedCriteria).filter(([, v]) => v != null))
+      : {};
     await createProspect({
       name: place.name,
       type,
@@ -71,15 +79,29 @@ export default function Search() {
       pipelineStatus: "a_contacter",
       criteria: {
         noWebsite: !place.website,
+        ...suggestedCriteria,
         ...(ai?.redFlags ? Object.fromEntries(ai.redFlags.map((f) => [f, true])) : {}),
-        ...(ai?.suggestedCriteria?.localPme != null ? { localPme: ai.suggestedCriteria.localPme } : {}),
       },
       needsReservation: ai?.suggestedNeedsReservation ?? false,
-      strongVisualIdentity: false,
+      strongVisualIdentity: ai?.suggestedStrongVisualIdentity ?? false,
       multiLocation: false,
+      aiSuggestedOfferId: ai?.suggestedOfferId || null,
       notes: ai?.reasoning ? `IA : ${ai.reasoning}` : "",
     });
     setImported((s) => ({ ...s, [place.id]: true }));
+  }
+
+  async function handleImportAllRecommended() {
+    const toImport = results.filter((r) => r.ai?.verdict === "prospect_valide" && !imported[r.id]);
+    if (!toImport.length) return;
+    setImportingAll(true);
+    try {
+      for (const place of toImport) {
+        await handleImport(place);
+      }
+    } finally {
+      setImportingAll(false);
+    }
   }
 
   return (
@@ -107,12 +129,16 @@ export default function Search() {
       </form>
 
       {results.length > 0 && (
-        <div style={{ margin: "12px 0", display: "flex", alignItems: "center", gap: 10 }}>
-          <button onClick={handleEnrich} disabled={enriching}>
-            {enriching ? "Analyse IA en cours..." : "Enrichir avec l'IA"}
+        <div style={{ margin: "12px 0", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <button onClick={() => runEnrich(results)} disabled={enriching}>
+            {enriching ? "Analyse IA en cours..." : "Ré-analyser avec l'IA"}
+          </button>
+          <button className="primary" onClick={handleImportAllRecommended} disabled={importingAll || enriching}>
+            {importingAll ? "Import en cours..." : "Importer tous les recommandés"}
           </button>
           <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
-            Vérifie l'adéquation avec ton ICP à partir des données disponibles (avis Google, photos, Instagram restent à vérifier manuellement).
+            L'IA analyse et cible automatiquement après chaque recherche : verdict, critères et offre recommandée
+            (avis Google, photos, Instagram restent à vérifier manuellement).
           </span>
           {enrichError && <span style={{ fontSize: 13, color: "var(--danger)" }}>{enrichError}</span>}
         </div>
@@ -126,6 +152,7 @@ export default function Search() {
               <th>Ville</th>
               <th>Site web</th>
               <th>Avis IA</th>
+              <th>Offre suggérée</th>
               <th></th>
             </tr>
           </thead>
@@ -140,10 +167,13 @@ export default function Search() {
                     <span className={`badge ${VERDICT_LABELS[r.ai.verdict]?.cls || "neutral"}`} title={r.ai.reasoning}>
                       {VERDICT_LABELS[r.ai.verdict]?.label || r.ai.verdict}
                     </span>
+                  ) : enriching ? (
+                    <span style={{ color: "var(--text-muted)", fontSize: 13 }}>Analyse...</span>
                   ) : (
                     <span style={{ color: "var(--text-muted)", fontSize: 13 }}>—</span>
                   )}
                 </td>
+                <td style={{ fontSize: 13 }}>{r.ai?.suggestedOfferId || "—"}</td>
                 <td>
                   <button className="primary" disabled={imported[r.id]} onClick={() => handleImport(r)}>
                     {imported[r.id] ? "Importé" : "Importer"}
@@ -152,7 +182,7 @@ export default function Search() {
               </tr>
             ))}
             {results.length === 0 && !loading && (
-              <tr><td colSpan={5} style={{ color: "var(--text-muted)" }}>Lance une recherche pour voir des résultats.</td></tr>
+              <tr><td colSpan={6} style={{ color: "var(--text-muted)" }}>Lance une recherche pour voir des résultats.</td></tr>
             )}
           </tbody>
         </table>
