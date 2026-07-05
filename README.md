@@ -132,6 +132,22 @@ Un site injoignable est marqué directement sans appel IA. Le résultat
 pré-remplit le critère "Site très ancien" du scoring ICP et affiche un badge
 (Site ancien / Site moderne / Injoignable) dans la liste.
 
+## Suggestions de créneaux et d'accroches d'appel
+
+Écran "Suggestions" : propose des sessions de cold call groupées par type
+d'établissement, sur les créneaux jugés les plus favorables (règles statiques,
+gratuites, dans `src/config/callingWindows.js` — à ajuster librement selon
+ton expérience terrain). Seuls les prospects "à contacter" pas encore
+planifiés sont proposés (`src/lib/suggestSessions.js`, pur calcul, n'écrit
+rien en base).
+
+Pour chaque suggestion, le bouton "Accroches IA" appelle `api/enrich/call-angles.js`
+— un seul appel IA pour tout le lot de prospects de la session, réutilisant
+le profil ICP (`src/config/icpProfile.js`) — et génère une phrase d'accroche
++ un angle de pain point par prospect. Ces accroches sont ensuite affichées
+directement dans la vue "Cold call" pendant l'appel. Rien n'est créé tant que
+tu ne cliques pas "Créer cette session".
+
 ## Développement local
 
 ```bash

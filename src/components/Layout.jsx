@@ -7,6 +7,7 @@ const LINKS = [
   { to: "/recherche", label: "Recherche" },
   { to: "/cold-call", label: "Cold call" },
   { to: "/planning", label: "Planning" },
+  { to: "/suggestions", label: "Suggestions" },
   { to: "/reglages", label: "Réglages" },
 ];
 
