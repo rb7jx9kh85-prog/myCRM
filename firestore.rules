@@ -1,0 +1,17 @@
+rules_version = '2';
+
+// Accès restreint à un seul compte (usage solo). Remplace la valeur
+// ci-dessous par ton adresse email exacte du compte Firebase Auth,
+// ou configure ALLOWED_EMAIL comme custom claim si tu préfères.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner() {
+      return request.auth != null
+        && request.auth.token.email == "REMPLACE_PAR_TON_EMAIL@example.com";
+    }
+
+    match /{document=**} {
+      allow read, write: if isOwner();
+    }
+  }
+}
