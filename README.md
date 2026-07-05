@@ -33,6 +33,7 @@ pas secrète en soi, mais les clés Geoapify/Google/Firebase Admin le sont.
 | `CRON_SECRET` | Choisis une chaîne aléatoire toi-même | **Oui** |
 | `OPENAI_API_KEY` | Ta clé OpenAI existante | **Oui** |
 | `OPENAI_MODEL` | Optionnel, défaut `gpt-4o-mini` — change si tu préfères un autre modèle | Non |
+| `OPENAI_MODEL_WEBSITE_CHECK` | Optionnel, défaut `gpt-3.5-turbo` — modèle utilisé pour la vérification (bon marché) des sites web des prospects | Non |
 
 Après avoir tout ajouté : redéploie le projet pour que les variables soient prises en compte.
 
@@ -117,6 +118,19 @@ vérifier manuellement" sur ces points plutôt que d'inventer une réponse.
 Chaque résultat reçoit un badge (Recommandé / À vérifier / À exclure) et un
 raisonnement consultable au survol ; à l'import, les red flags et besoins
 détectés pré-remplissent la fiche prospect (tout reste modifiable).
+
+## Vérification des sites web (bon marché)
+
+Sur l'écran Prospects, le bouton "Vérifier les sites web" traite en un seul
+lot tous les prospects ayant un site jamais vérifié : `api/enrich/check-website.js`
+récupère un extrait borné (taille + timeout, pas de crawl ni de recherche web)
+de chaque page, en extrait quelques signaux techniques (titre, meta
+generator, présence d'une balise viewport, année de copyright), puis un
+**unique** appel IA classe tous les sites du lot d'un coup avec un modèle bon
+marché (`gpt-3.5-turbo` par défaut, réglable via `OPENAI_MODEL_WEBSITE_CHECK`).
+Un site injoignable est marqué directement sans appel IA. Le résultat
+pré-remplit le critère "Site très ancien" du scoring ICP et affiche un badge
+(Site ancien / Site moderne / Injoignable) dans la liste.
 
 ## Développement local
 

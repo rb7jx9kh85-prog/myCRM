@@ -1,16 +1,60 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { subscribeProspects } from "../lib/prospects";
+import { subscribeProspects, updateProspect } from "../lib/prospects";
 import { PIPELINE_STATUSES, ESTABLISHMENT_TYPE_OPTIONS } from "../config/pipeline";
 import ScoreBadge from "../components/ScoreBadge";
+
+const WEBSITE_STATUS_LABELS = {
+  ancien: { label: "Site ancien", cls: "success" },
+  moderne: { label: "Site moderne", cls: "neutral" },
+  injoignable: { label: "Injoignable", cls: "danger" },
+};
 
 export default function Prospects() {
   const [prospects, setProspects] = useState([]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [showExcluded, setShowExcluded] = useState(false);
+  const [checkingWebsites, setCheckingWebsites] = useState(false);
+  const [websiteCheckStatus, setWebsiteCheckStatus] = useState("");
 
   useEffect(() => subscribeProspects(setProspects), []);
+
+  async function handleCheckWebsites() {
+    const toCheck = prospects.filter((p) => p.website && !p.websiteCheck);
+    if (toCheck.length === 0) {
+      setWebsiteCheckStatus("Tous les sites web ont déjà été vérifiés.");
+      return;
+    }
+    setCheckingWebsites(true);
+    setWebsiteCheckStatus(`Vérification de ${toCheck.length} site(s) en cours...`);
+    try {
+      const res = await fetch("/api/enrich/check-website", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: toCheck.map((p) => ({ id: p.id, website: p.website })) }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setWebsiteCheckStatus(data.error);
+        return;
+      }
+      for (const result of data.results) {
+        const prospect = toCheck.find((p) => p.id === result.id);
+        if (!prospect) continue;
+        await updateProspect(prospect.id, {
+          ...prospect,
+          criteria: { ...prospect.criteria, oldWebsite: result.oldWebsite },
+          websiteCheck: { status: result.status, reasoning: result.reasoning, checkedAt: new Date().toISOString() },
+        });
+      }
+      setWebsiteCheckStatus(`${data.results.length} site(s) vérifié(s).`);
+    } catch {
+      setWebsiteCheckStatus("Échec de la vérification des sites web.");
+    } finally {
+      setCheckingWebsites(false);
+    }
+  }
 
   const filtered = useMemo(() => {
     return prospects.filter((p) => {
@@ -47,7 +91,11 @@ export default function Prospects() {
           <input type="checkbox" style={{ width: "auto" }} checked={showExcluded} onChange={(e) => setShowExcluded(e.target.checked)} />
           Afficher les exclus
         </label>
+        <button onClick={handleCheckWebsites} disabled={checkingWebsites} style={{ marginLeft: "auto" }}>
+          {checkingWebsites ? "Vérification..." : "Vérifier les sites web"}
+        </button>
       </div>
+      {websiteCheckStatus && <p style={{ fontSize: 13, marginTop: -8 }}>{websiteCheckStatus}</p>}
 
       <div className="card">
         <table>
@@ -57,6 +105,7 @@ export default function Prospects() {
               <th>Type</th>
               <th>Ville</th>
               <th>Score</th>
+              <th>Site web</th>
               <th>Prestation</th>
               <th>Statut</th>
             </tr>
@@ -68,12 +117,23 @@ export default function Prospects() {
                 <td>{ESTABLISHMENT_TYPE_OPTIONS.find((t) => t.id === p.type)?.label || p.type}</td>
                 <td>{p.city}</td>
                 <td><ScoreBadge score={p.scoreTotal} redFlags={p.redFlags} autoExcluded={p.autoExcluded} /></td>
+                <td>
+                  {!p.website ? (
+                    <span className="badge success">Pas de site</span>
+                  ) : p.websiteCheck ? (
+                    <span className={`badge ${WEBSITE_STATUS_LABELS[p.websiteCheck.status]?.cls || "neutral"}`} title={p.websiteCheck.reasoning}>
+                      {WEBSITE_STATUS_LABELS[p.websiteCheck.status]?.label || p.websiteCheck.status}
+                    </span>
+                  ) : (
+                    <span style={{ color: "var(--text-muted)", fontSize: 13 }}>Non vérifié</span>
+                  )}
+                </td>
                 <td>{p.recommendation?.offerLabel || "—"}</td>
                 <td>{PIPELINE_STATUSES.find((s) => s.id === p.pipelineStatus)?.label || p.pipelineStatus}</td>
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={6} style={{ color: "var(--text-muted)" }}>Aucun prospect.</td></tr>
+              <tr><td colSpan={7} style={{ color: "var(--text-muted)" }}>Aucun prospect.</td></tr>
             )}
           </tbody>
         </table>
