@@ -7,7 +7,15 @@ import { getFirestore } from "firebase-admin/firestore";
 
 function getAdminApp() {
   if (getApps().length) return getApps()[0];
-  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY manquante dans les variables d'environnement Vercel.");
+  }
+  let serviceAccount;
+  try {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+  } catch {
+    throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY n'est pas un JSON valide (vérifie qu'elle a été collée en entier, sans guillemets autour).");
+  }
   return initializeApp({ credential: cert(serviceAccount) });
 }
 

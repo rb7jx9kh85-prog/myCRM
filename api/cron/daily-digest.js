@@ -18,6 +18,8 @@ export default async function handler(req, res) {
     }
   }
 
+  try {
+
   const db = getAdminDb();
   const settingsSnap = await db.collection("settings").doc("notifications").get();
   const settings = settingsSnap.exists ? settingsSnap.data() : {};
@@ -95,4 +97,8 @@ export default async function handler(req, res) {
   }
 
   res.status(200).json({ sent: tokens.length > 0, lines });
+  } catch (err) {
+    console.error("cron/daily-digest error:", err);
+    res.status(500).json({ error: err.message || "Erreur lors du digest quotidien." });
+  }
 }
