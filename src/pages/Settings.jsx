@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { NOTIFICATION_TRIGGERS } from "../config/notificationTriggers";
-import { getNotificationSettings, saveNotificationSettings, defaultNotificationSettings, saveFcmToken } from "../lib/settings";
-import { getMessagingIfSupported } from "../firebase";
-import { getToken } from "firebase/messaging";
+import { getNotificationSettings, saveNotificationSettings, defaultNotificationSettings } from "../lib/settings";
+import { enablePushNotifications } from "../lib/pushNotifications";
 
 export default function Settings() {
   const [settings, setSettings] = useState(defaultNotificationSettings());
@@ -23,23 +22,8 @@ export default function Settings() {
   }
 
   async function enablePush() {
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        setNotifStatus("Permission refusée.");
-        return;
-      }
-      const messaging = await getMessagingIfSupported();
-      if (!messaging) {
-        setNotifStatus("Notifications push non supportées sur cet appareil/navigateur.");
-        return;
-      }
-      const token = await getToken(messaging, { vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY });
-      await saveFcmToken(token);
-      setNotifStatus("Notifications activées sur cet appareil.");
-    } catch {
-      setNotifStatus("Erreur lors de l'activation des notifications.");
-    }
+    const res = await enablePushNotifications();
+    setNotifStatus(res.ok ? "Notifications activées sur cet appareil." : res.reason);
   }
 
   async function handleSync() {

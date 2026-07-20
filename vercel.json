@@ -2,6 +2,10 @@
   "crons": [
     { "path": "/api/cron/daily-digest", "schedule": "0 6 * * *" }
   ],
+  "functions": {
+    "api/enrich/analyze.js": { "maxDuration": 30 },
+    "api/enrich/check-website.js": { "maxDuration": 30 }
+  },
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]

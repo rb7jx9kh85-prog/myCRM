@@ -13,7 +13,8 @@ import { db } from "../firebase";
 
 const tasksCol = collection(db, "tasks");
 
-// task = { title, dueDate: "YYYY-MM-DD"|null, done: bool,
+// task = { title, dueDate: "YYYY-MM-DD"|null, time: "HH:MM"|null, done: bool,
+//          reminderMinutesBefore: number|null, recurrence: "none"|"daily"|"weekly"|"monthly",
 //          prospectId: string|null, prospectName: string|null }
 export function subscribeTasks(callback) {
   const q = query(tasksCol, orderBy("createdAt", "desc"));
@@ -26,6 +27,9 @@ export async function createTask(input) {
   return addDoc(tasksCol, {
     title: input.title,
     dueDate: input.dueDate || null,
+    time: input.time || null,
+    reminderMinutesBefore: input.reminderMinutesBefore ?? null,
+    recurrence: input.recurrence || "none",
     done: false,
     prospectId: input.prospectId || null,
     prospectName: input.prospectName || null,

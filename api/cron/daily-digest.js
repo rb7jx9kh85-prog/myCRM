@@ -5,6 +5,7 @@
 import { getMessaging } from "firebase-admin/messaging";
 import { getAdminDb } from "../_firebaseAdmin.js";
 import { NOTIFICATION_TRIGGERS } from "../../src/config/notificationTriggers.js";
+import { taskOccursOn } from "../../src/lib/taskRecurrence.js";
 import { getApps } from "firebase-admin/app";
 
 function todayStr() {
@@ -33,12 +34,14 @@ export default async function handler(req, res) {
     return settings[id]?.[key] ?? defaults[key];
   }
 
-  const [prospectsSnap, sessionsSnap] = await Promise.all([
+  const [prospectsSnap, sessionsSnap, tasksSnap] = await Promise.all([
     db.collection("prospects").get(),
     db.collection("sessions").get(),
+    db.collection("tasks").get(),
   ]);
   const prospects = prospectsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   const sessions = sessionsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const tasks = tasksSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
   const today = todayStr();
   const now = Date.now();
@@ -77,6 +80,17 @@ export default async function handler(req, res) {
     const cutoff = now - days * 86400000;
     const stale = prospects.filter((p) => p.pipelineStatus === "devis_envoye" && (p.lastContactDate?.toMillis?.() || 0) < cutoff);
     if (stale.length) lines.push(`${stale.length} devis envoyé(s) depuis plus de ${days} jours sans relance : ${stale.map((p) => p.name).join(", ")}`);
+  }
+
+  if (enabled("tasksDueToday")) {
+    const dueToday = tasks.filter((t) => !t.done && taskOccursOn(t, today));
+    if (dueToday.length) {
+      const withTimes = dueToday
+        .slice()
+        .sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99"))
+        .map((t) => (t.time ? `${t.time} ${t.title}` : t.title));
+      lines.push(`${dueToday.length} tâche(s) agenda aujourd'hui : ${withTimes.join(", ")}`);
+    }
   }
 
   if (!lines.length) {

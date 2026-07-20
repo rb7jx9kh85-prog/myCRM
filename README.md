@@ -32,8 +32,8 @@ pas secrète en soi, mais les clés Geoapify/Google/Firebase Admin le sont.
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google Cloud Console → APIs & Services → Identifiants → Client OAuth 2.0 (type "Application Web"), redirect URI = `https://<ton-domaine-vercel>/api/sheets/callback` | **Oui** (le secret) |
 | `CRON_SECRET` | Choisis une chaîne aléatoire toi-même | **Oui** |
 | `OPENAI_API_KEY` | Ta clé OpenAI existante | **Oui** |
-| `OPENAI_MODEL` | Optionnel, défaut `gpt-4o-mini` — change si tu préfères un autre modèle | Non |
-| `OPENAI_MODEL_WEBSITE_CHECK` | Optionnel, défaut `gpt-3.5-turbo` — modèle utilisé pour la vérification (bon marché) des sites web des prospects | Non |
+| `OPENAI_MODEL` | Optionnel, défaut `gpt-5.6-luna` (tier le moins cher d'OpenAI) — utilisé pour tous les appels IA (scoring ICP, jugement des sites web, angles d'appel) | Non |
+| `GOOGLE_PLACES_API_KEY` | Optionnel — active le filtre strict "fermé définitivement sur Google Maps" à la recherche (coût séparé, facturé par Google). Sans clé, ce filtre est simplement ignoré | Non |
 
 Après avoir tout ajouté : redéploie le projet pour que les variables soient prises en compte.
 
@@ -119,18 +119,30 @@ Chaque résultat reçoit un badge (Recommandé / À vérifier / À exclure) et u
 raisonnement consultable au survol ; à l'import, les red flags et besoins
 détectés pré-remplissent la fiche prospect (tout reste modifiable).
 
-## Vérification des sites web (bon marché)
+## Filtre qualité (recherche) et vérification des sites web
 
-Sur l'écran Prospects, le bouton "Vérifier les sites web" traite en un seul
-lot tous les prospects ayant un site jamais vérifié : `api/enrich/check-website.js`
-récupère un extrait borné (taille + timeout, pas de crawl ni de recherche web)
-de chaque page, en extrait quelques signaux techniques (titre, meta
-generator, présence d'une balise viewport, année de copyright), puis un
-**unique** appel IA classe tous les sites du lot d'un coup avec un modèle bon
-marché (`gpt-3.5-turbo` par défaut, réglable via `OPENAI_MODEL_WEBSITE_CHECK`).
-Un site injoignable est marqué directement sans appel IA. Le résultat
-pré-remplit le critère "Site très ancien" du scoring ICP et affiche un badge
-(Site ancien / Site moderne / Injoignable) dans la liste.
+À la recherche (`Recherche` → Geoapify), `api/enrich/analyze.js` récupère un
+extrait borné (taille + timeout, pas de crawl) du site de chaque candidat
+via `api/enrich/_websiteSignals.js` (titre, extrait de texte **réellement
+visible** sur la page, longueur du texte, balise viewport, année de
+copyright, détection domaine parqué / page par défaut), puis un **unique**
+appel IA (`gpt-5.6-luna` par défaut) juge chaque site — vide/cassé/nul/daté
+(2010-2020) compte comme signal positif (le prospect a besoin d'un site),
+un site déjà excellent déclenche le red flag `greatWebsite` (exclusion). Un
+site injoignable est traité directement sans appel IA. Coût cible : moins de
+0,02 $ pour 20 prospects.
+
+Si `GOOGLE_PLACES_API_KEY` est définie, les établissements notés "fermé
+définitivement" sur Google Maps sont exclus automatiquement, sans même
+passer par l'IA (Geoapify/OSM n'a pas cette info nativement — c'est un appel
+Google Places séparé, facturé par Google en plus du budget IA OpenAI). Sans
+cette clé, ce filtre précis est simplement ignoré.
+
+Sur l'écran Prospects, le bouton "Vérifier les sites web" applique la même
+logique de jugement (via `api/enrich/check-website.js`, réutilise
+`_websiteSignals.js`) pour re-vérifier en lot les prospects déjà importés.
+Le résultat pré-remplit le critère "Site très ancien" du scoring ICP et
+affiche un badge (Site ancien / Site moderne / Injoignable) dans la liste.
 
 ## Suggestions de créneaux et d'accroches d'appel
 

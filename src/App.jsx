@@ -7,7 +7,7 @@ import Prospects from "./pages/Prospects";
 import ProspectDetail from "./pages/ProspectDetail";
 import Search from "./pages/Search";
 import ColdCall from "./pages/ColdCall";
-import Planning from "./pages/Planning";
+import Agenda from "./pages/Agenda";
 import Suggestions from "./pages/Suggestions";
 import Tasks from "./pages/Tasks";
 import Settings from "./pages/Settings";
@@ -32,7 +32,7 @@ export default function App() {
             <Route path="/prospects/:id" element={<ProspectDetail />} />
             <Route path="/recherche" element={<Search />} />
             <Route path="/cold-call" element={<ColdCall />} />
-            <Route path="/planning" element={<Planning />} />
+            <Route path="/agenda" element={<Agenda />} />
             <Route path="/suggestions" element={<Suggestions />} />
             <Route path="/taches" element={<Tasks />} />
             <Route path="/reglages" element={<Settings />} />
