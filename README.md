@@ -31,6 +31,9 @@ pas secrète en soi, mais les clés Geoapify/Google/Firebase Admin le sont.
 | `GEOAPIFY_API_KEY` | Ta clé Geoapify existante | **Oui** |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google Cloud Console → APIs & Services → Identifiants → Client OAuth 2.0 (type "Application Web"), redirect URI = `https://<ton-domaine-vercel>/api/sheets/callback` | **Oui** (le secret) |
 | `CRON_SECRET` | Choisis une chaîne aléatoire toi-même | **Oui** |
+| `OPENAI_API_KEY` | Ta clé OpenAI existante | **Oui** |
+| `OPENAI_MODEL` | Optionnel, défaut `gpt-4o-mini` — change si tu préfères un autre modèle | Non |
+| `OPENAI_MODEL_WEBSITE_CHECK` | Optionnel, défaut `gpt-3.5-turbo` — modèle utilisé pour la vérification (bon marché) des sites web des prospects | Non |
 
 Après avoir tout ajouté : redéploie le projet pour que les variables soient prises en compte.
 
@@ -97,6 +100,75 @@ Tout est centralisé dans `src/config/notificationTriggers.js` :
 
 Ces deux fichiers sont volontairement séparés de la logique de calcul
 (`src/lib/scoring.js`) pour rester modifiables sans toucher au reste de l'app.
+
+## Enrichissement IA (OpenAI)
+
+Sur l'écran Recherche, après une recherche Geoapify, le bouton "Enrichir
+avec l'IA" envoie les résultats à `api/enrich/analyze.js`, qui appelle
+OpenAI avec un system prompt construit à partir de `src/config/icpProfile.js`
+— ce fichier contient l'intégralité de ton document ICP (client idéal,
+signaux positifs, red flags, pain points, offres, budgets, cantons
+prioritaires). Modifie ce fichier si tes critères évoluent, aucune autre
+partie du code à toucher.
+
+L'IA ne voit que les données factuelles disponibles (nom, type, adresse,
+téléphone, présence d'un site) — elle ne peut pas juger les avis Google, la
+qualité des photos ou l'activité Instagram, et renvoie explicitement "à
+vérifier manuellement" sur ces points plutôt que d'inventer une réponse.
+Chaque résultat reçoit un badge (Recommandé / À vérifier / À exclure) et un
+raisonnement consultable au survol ; à l'import, les red flags et besoins
+détectés pré-remplissent la fiche prospect (tout reste modifiable).
+
+## Vérification des sites web (bon marché)
+
+Sur l'écran Prospects, le bouton "Vérifier les sites web" traite en un seul
+lot tous les prospects ayant un site jamais vérifié : `api/enrich/check-website.js`
+récupère un extrait borné (taille + timeout, pas de crawl ni de recherche web)
+de chaque page, en extrait quelques signaux techniques (titre, meta
+generator, présence d'une balise viewport, année de copyright), puis un
+**unique** appel IA classe tous les sites du lot d'un coup avec un modèle bon
+marché (`gpt-3.5-turbo` par défaut, réglable via `OPENAI_MODEL_WEBSITE_CHECK`).
+Un site injoignable est marqué directement sans appel IA. Le résultat
+pré-remplit le critère "Site très ancien" du scoring ICP et affiche un badge
+(Site ancien / Site moderne / Injoignable) dans la liste.
+
+## Suggestions de créneaux et d'accroches d'appel
+
+Écran "Suggestions" : propose des sessions de cold call groupées par type
+d'établissement, sur les créneaux jugés les plus favorables (règles statiques,
+gratuites, dans `src/config/callingWindows.js` — à ajuster librement selon
+ton expérience terrain). Seuls les prospects "à contacter" pas encore
+planifiés sont proposés (`src/lib/suggestSessions.js`, pur calcul, n'écrit
+rien en base).
+
+Pour chaque suggestion, le bouton "Accroches IA" appelle `api/enrich/call-angles.js`
+— un seul appel IA pour tout le lot de prospects de la session, réutilisant
+le profil ICP (`src/config/icpProfile.js`) — et génère une phrase d'accroche
++ un angle de pain point par prospect. Ces accroches sont ensuite affichées
+directement dans la vue "Cold call" pendant l'appel. Rien n'est créé tant que
+tu ne cliques pas "Créer cette session".
+
+## Enrichissement des numéros de téléphone (Geoapify, sans coût IA)
+
+Sur l'écran Recherche, les fiches sans téléphone sont automatiquement
+complétées après chaque recherche via l'API Geoapify Place Details
+(`api/geoapify/place-details.js`) — même clé `GEOAPIFY_API_KEY`, pas
+d'appel IA. À l'import, l'identifiant Geoapify (`geoapifyPlaceId`) est
+conservé sur le prospect ; le bouton "Enrichir les numéros de téléphone" sur
+l'écran Prospects permet de relancer la recherche plus tard pour les
+prospects encore sans numéro (ne fonctionne que pour les prospects importés
+après l'ajout de cette fonctionnalité, faute d'identifiant Geoapify stocké
+avant).
+
+## Gestion des tâches
+
+Écran "Tâches" : liste de tâches libres (titre, échéance optionnelle, lien
+optionnel vers un prospect), indépendante des sessions de cold call —
+groupées par échéance (en retard / aujourd'hui / à venir / sans échéance).
+Un résumé (en retard, dues aujourd'hui, total) apparaît sur le tableau de
+bord. Chaque fiche prospect affiche aussi ses tâches liées avec ajout rapide
+(`src/components/ProspectTasks.jsx`). Collection Firestore `tasks`, couverte
+par la même règle de sécurité que le reste (`firestore.rules`).
 
 ## Développement local
 

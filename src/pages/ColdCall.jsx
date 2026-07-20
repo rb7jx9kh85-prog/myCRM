@@ -56,6 +56,11 @@ export default function ColdCall() {
             <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
               {p.recommendation?.offerLabel || "Skip"} · {p.contactName || "—"} · {p.phone || "—"}
             </div>
+            {session?.callAngles?.[p.id] && (
+              <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>
+                Angle IA : « {session.callAngles[p.id].opener} » — {session.callAngles[p.id].angle}
+              </div>
+            )}
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {CALL_OUTCOMES.map((o) => (

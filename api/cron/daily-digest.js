@@ -3,8 +3,8 @@
 // Déclenché par vercel.json ("crons"). Vercel ajoute automatiquement l'en-tête
 // Authorization: Bearer <CRON_SECRET> si la variable d'env CRON_SECRET est définie.
 import { getMessaging } from "firebase-admin/messaging";
-import { getAdminDb } from "../_firebaseAdmin";
-import { NOTIFICATION_TRIGGERS } from "../../src/config/notificationTriggers";
+import { getAdminDb } from "../_firebaseAdmin.js";
+import { NOTIFICATION_TRIGGERS } from "../../src/config/notificationTriggers.js";
 import { getApps } from "firebase-admin/app";
 
 function todayStr() {
@@ -17,6 +17,8 @@ export default async function handler(req, res) {
       return res.status(401).end();
     }
   }
+
+  try {
 
   const db = getAdminDb();
   const settingsSnap = await db.collection("settings").doc("notifications").get();
@@ -95,4 +97,8 @@ export default async function handler(req, res) {
   }
 
   res.status(200).json({ sent: tokens.length > 0, lines });
+  } catch (err) {
+    console.error("cron/daily-digest error:", err);
+    res.status(500).json({ error: err.message || "Erreur lors du digest quotidien." });
+  }
 }

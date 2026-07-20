@@ -2,13 +2,22 @@ import { useState } from "react";
 import { createProspect } from "../lib/prospects";
 import { CANTONS, ESTABLISHMENT_TYPE_OPTIONS } from "../config/pipeline";
 
+const VERDICT_LABELS = {
+  prospect_valide: { label: "Recommandé", cls: "success" },
+  a_verifier: { label: "À vérifier", cls: "neutral" },
+  exclure: { label: "À exclure", cls: "danger" },
+};
+
 export default function Search() {
   const [canton, setCanton] = useState("Valais");
   const [type, setType] = useState("restaurant");
   const [radiusKm, setRadiusKm] = useState(15);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [enriching, setEnriching] = useState(false);
+  const [enrichError, setEnrichError] = useState("");
   const [imported, setImported] = useState({});
+  const [importingAll, setImportingAll] = useState(false);
 
   async function handleSearch(e) {
     e.preventDefault();
@@ -18,13 +27,73 @@ export default function Search() {
       const params = new URLSearchParams({ canton, type, radiusKm });
       const res = await fetch(`/api/geoapify/search?${params}`);
       const data = await res.json();
-      setResults(data.results || []);
+      let found = data.results || [];
+      found = await enrichMissingPhones(found);
+      setResults(found);
+      if (found.length) await runEnrich(found);
     } finally {
       setLoading(false);
     }
   }
 
+  // Complète téléphone/site web manquants via Geoapify Place Details (même
+  // clé, pas de coût IA) avant l'analyse IA — uniquement pour les fiches
+  // incomplètes, en un seul appel groupé.
+  async function enrichMissingPhones(list) {
+    const missing = list.filter((r) => !r.phone);
+    if (!missing.length) return list;
+    try {
+      const res = await fetch("/api/geoapify/place-details", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: missing.map((r) => r.id) }),
+      });
+      const data = await res.json();
+      if (data.error || !data.results) return list;
+      const byId = Object.fromEntries(data.results.map((r) => [r.id, r]));
+      return list.map((r) => {
+        const found = byId[r.id];
+        if (!found) return r;
+        return { ...r, phone: r.phone || found.phone || "", website: r.website || found.website || "" };
+      });
+    } catch {
+      return list;
+    }
+  }
+
+  // Ciblage automatique : appelée juste après la recherche (plus besoin de
+  // cliquer manuellement) et réutilisable pour ré-analyser après un changement.
+  async function runEnrich(list) {
+    setEnriching(true);
+    setEnrichError("");
+    try {
+      const candidates = list.map((r) => ({ ...r, type }));
+      const res = await fetch("/api/enrich/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidates }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setEnrichError(data.error);
+        return;
+      }
+      setResults((prev) => prev.map((r, i) => {
+        const match = data.results.find((x) => x.index === i);
+        return match ? { ...r, ai: match } : r;
+      }));
+    } catch {
+      setEnrichError("Échec de l'enrichissement IA.");
+    } finally {
+      setEnriching(false);
+    }
+  }
+
   async function handleImport(place) {
+    const ai = place.ai;
+    const suggestedCriteria = ai?.suggestedCriteria
+      ? Object.fromEntries(Object.entries(ai.suggestedCriteria).filter(([, v]) => v != null))
+      : {};
     await createProspect({
       name: place.name,
       type,
@@ -33,14 +102,33 @@ export default function Search() {
       address: place.address || "",
       phone: place.phone || "",
       website: place.website || "",
+      geoapifyPlaceId: place.id || null,
       pipelineStatus: "a_contacter",
-      criteria: { noWebsite: !place.website },
-      needsReservation: false,
-      strongVisualIdentity: false,
+      criteria: {
+        noWebsite: !place.website,
+        ...suggestedCriteria,
+        ...(ai?.redFlags ? Object.fromEntries(ai.redFlags.map((f) => [f, true])) : {}),
+      },
+      needsReservation: ai?.suggestedNeedsReservation ?? false,
+      strongVisualIdentity: ai?.suggestedStrongVisualIdentity ?? false,
       multiLocation: false,
-      notes: "",
+      aiSuggestedOfferId: ai?.suggestedOfferId || null,
+      notes: ai?.reasoning ? `IA : ${ai.reasoning}` : "",
     });
     setImported((s) => ({ ...s, [place.id]: true }));
+  }
+
+  async function handleImportAllRecommended() {
+    const toImport = results.filter((r) => r.ai?.verdict === "prospect_valide" && !imported[r.id]);
+    if (!toImport.length) return;
+    setImportingAll(true);
+    try {
+      for (const place of toImport) {
+        await handleImport(place);
+      }
+    } finally {
+      setImportingAll(false);
+    }
   }
 
   return (
@@ -67,13 +155,32 @@ export default function Search() {
         <button className="primary" type="submit" disabled={loading}>{loading ? "Recherche..." : "Rechercher"}</button>
       </form>
 
-      <div className="card" style={{ marginTop: 16 }}>
+      {results.length > 0 && (
+        <div style={{ margin: "12px 0", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <button onClick={() => runEnrich(results)} disabled={enriching}>
+            {enriching ? "Analyse IA en cours..." : "Ré-analyser avec l'IA"}
+          </button>
+          <button className="primary" onClick={handleImportAllRecommended} disabled={importingAll || enriching}>
+            {importingAll ? "Import en cours..." : "Importer tous les recommandés"}
+          </button>
+          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
+            L'IA analyse et cible automatiquement après chaque recherche : verdict, critères et offre recommandée
+            (avis Google, photos, Instagram restent à vérifier manuellement).
+          </span>
+          {enrichError && <span style={{ fontSize: 13, color: "var(--danger)" }}>{enrichError}</span>}
+        </div>
+      )}
+
+      <div className="card" style={{ marginTop: 8 }}>
         <table>
           <thead>
             <tr>
               <th>Nom</th>
               <th>Ville</th>
+              <th>Téléphone</th>
               <th>Site web</th>
+              <th>Avis IA</th>
+              <th>Offre suggérée</th>
               <th></th>
             </tr>
           </thead>
@@ -82,7 +189,20 @@ export default function Search() {
               <tr key={r.id}>
                 <td>{r.name}</td>
                 <td>{r.city}</td>
+                <td>{r.phone || <span style={{ color: "var(--text-muted)", fontSize: 13 }}>—</span>}</td>
                 <td>{r.website ? <a href={r.website} target="_blank" rel="noreferrer">lien</a> : <span className="badge success">Pas de site (+30)</span>}</td>
+                <td>
+                  {r.ai ? (
+                    <span className={`badge ${VERDICT_LABELS[r.ai.verdict]?.cls || "neutral"}`} title={r.ai.reasoning}>
+                      {VERDICT_LABELS[r.ai.verdict]?.label || r.ai.verdict}
+                    </span>
+                  ) : enriching ? (
+                    <span style={{ color: "var(--text-muted)", fontSize: 13 }}>Analyse...</span>
+                  ) : (
+                    <span style={{ color: "var(--text-muted)", fontSize: 13 }}>—</span>
+                  )}
+                </td>
+                <td style={{ fontSize: 13 }}>{r.ai?.suggestedOfferId || "—"}</td>
                 <td>
                   <button className="primary" disabled={imported[r.id]} onClick={() => handleImport(r)}>
                     {imported[r.id] ? "Importé" : "Importer"}
@@ -91,7 +211,7 @@ export default function Search() {
               </tr>
             ))}
             {results.length === 0 && !loading && (
-              <tr><td colSpan={4} style={{ color: "var(--text-muted)" }}>Lance une recherche pour voir des résultats.</td></tr>
+              <tr><td colSpan={7} style={{ color: "var(--text-muted)" }}>Lance une recherche pour voir des résultats.</td></tr>
             )}
           </tbody>
         </table>

@@ -8,6 +8,7 @@ import { recommend } from "../config/recommendationEngine";
 import { SCORING_CRITERIA, RED_FLAGS, EXTRA_RED_FLAG_FIELDS } from "../config/icpScoring";
 import { PIPELINE_STATUSES, ESTABLISHMENT_TYPE_OPTIONS, CANTONS } from "../config/pipeline";
 import ScoreBadge from "../components/ScoreBadge";
+import ProspectTasks from "../components/ProspectTasks";
 
 const EMPTY = {
   name: "",
@@ -159,6 +160,8 @@ export default function ProspectDetail() {
         <label>Notes</label>
         <textarea rows={4} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
       </div>
+
+      {!isNew && <ProspectTasks prospectId={id} prospectName={form.name} />}
 
       <button className="primary" type="submit" style={{ marginTop: 16 }}>
         {isNew ? "Créer le prospect" : "Enregistrer"}

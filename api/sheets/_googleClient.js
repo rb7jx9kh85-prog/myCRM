@@ -1,5 +1,5 @@
 import { google } from "googleapis";
-import { getAdminDb } from "../_firebaseAdmin";
+import { getAdminDb } from "../_firebaseAdmin.js";
 
 export function getRedirectUri(req) {
   const proto = req.headers["x-forwarded-proto"] || "https";

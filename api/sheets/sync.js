@@ -1,7 +1,7 @@
 import { google } from "googleapis";
-import { getAuthorizedClient, getStoredTokens, saveIntegrationDoc } from "./_googleClient";
-import { getAdminDb } from "../_firebaseAdmin";
-import { PIPELINE_STATUSES } from "../../src/config/pipeline";
+import { getAuthorizedClient, getStoredTokens, saveIntegrationDoc } from "./_googleClient.js";
+import { getAdminDb } from "../_firebaseAdmin.js";
+import { PIPELINE_STATUSES } from "../../src/config/pipeline.js";
 
 const RANGE = "Prospects!A2:J";
 
@@ -38,6 +38,7 @@ function fieldsEqual(a, b) {
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
+  try {
   const stored = await getStoredTokens();
   if (!stored?.spreadsheetId) {
     return res.status(400).json({ error: "Google Sheets non connecté. Clique sur 'Connecter mon compte Google' d'abord." });
@@ -140,4 +141,8 @@ export default async function handler(req, res) {
     pulled: pulledCount,
     conflicts,
   });
+  } catch (err) {
+    console.error("sheets/sync error:", err);
+    res.status(500).json({ error: err.message || "Erreur lors de la synchronisation." });
+  }
 }
