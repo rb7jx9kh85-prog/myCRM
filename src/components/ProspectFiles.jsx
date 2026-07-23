@@ -35,7 +35,7 @@ export default function ProspectFiles({ prospectId, attachments = [], onChange }
     setBusy(true);
     setMessage("");
     try {
-      const response = await fetch("/api/files/upload", {
+      const response = await fetch("/api/files", {
         method: "POST",
         headers: await authHeaders({
           "Content-Type": file.type || "application/octet-stream",
@@ -59,7 +59,7 @@ export default function ProspectFiles({ prospectId, attachments = [], onChange }
   async function handleDownload(file) {
     setMessage("");
     try {
-      const response = await fetch(`/api/files/download?pathname=${encodeURIComponent(file.pathname)}`, {
+      const response = await fetch(`/api/files?pathname=${encodeURIComponent(file.pathname)}`, {
         headers: await authHeaders(),
       });
       if (!response.ok) {
@@ -82,7 +82,7 @@ export default function ProspectFiles({ prospectId, attachments = [], onChange }
     setBusy(true);
     setMessage("");
     try {
-      const response = await fetch("/api/files/remove", {
+      const response = await fetch("/api/files", {
         method: "DELETE",
         headers: await authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ pathname: file.pathname }),
