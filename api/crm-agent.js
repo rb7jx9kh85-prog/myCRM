@@ -5,7 +5,24 @@ import { requireUser, sendApiError } from "./_apiAuth.js";
 const PROSPECT_FIELDS = new Set([
   "name", "type", "canton", "city", "address", "contactName", "phone", "email",
   "website", "pipelineStatus", "notes", "needsReservation", "strongVisualIdentity",
-  "multiLocation", "criteria", "nextCallDate",
+  "multiLocation", "nextCallDate",
+]);
+const TASK_FIELDS = new Set(["title", "dueDate", "done", "prospectId", "prospectName"]);
+const SESSION_FIELDS = new Set(["date", "startTime", "durationMinutes", "prospectIds", "status"]);
+const PIPELINE_STATUSES = new Set(["a_contacter", "contacte", "rdv_pris", "devis_envoye", "close", "perdu"]);
+const SESSION_STATUSES = new Set(["planned", "done"]);
+const SETTING_RULES = {
+  sessionReminder: new Set(["enabled", "minutesBefore"]),
+  callbackDue: new Set(["enabled"]),
+  inactivityReminder: new Set(["enabled", "days"]),
+  highScoreImport: new Set(["enabled", "threshold"]),
+  quoteFollowup: new Set(["enabled", "days"]),
+};
+const ACTION_TYPES = new Set([
+  "prospect.create", "prospect.update", "prospect.add_note",
+  "task.create", "task.update", "task.complete",
+  "session.create", "session.update",
+  "settings.notifications.update",
 ]);
 
 function cleanObject(input, allowed) {
@@ -24,18 +41,35 @@ function extractOutputText(data) {
 }
 
 function parsePlan(text) {
-  const cleaned = text.trim().replace(/^```json\s*/i, "").replace(/\s*```$/, "");
+  const raw = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start === -1 || end <= start) throw new Error("L’agent n’a pas renvoyé un plan exploitable.");
+  const cleaned = raw.slice(start, end + 1);
   const parsed = JSON.parse(cleaned);
   if (!Array.isArray(parsed.actions)) throw new Error("Plan IA invalide.");
   return {
     summary: String(parsed.summary || "Plan proposé par l’agent."),
-    actions: parsed.actions.slice(0, 100).map((action) => ({
-      type: String(action.type || ""),
-      targetId: action.targetId ? String(action.targetId) : null,
-      description: String(action.description || action.type || "Action CRM"),
-      payload: action.payload && typeof action.payload === "object" ? action.payload : {},
-    })),
+    actions: parsed.actions
+      .slice(0, 100)
+      .map((action) => ({
+        type: String(action.type || ""),
+        targetId: action.targetId ? String(action.targetId) : null,
+        description: String(action.description || action.type || "Action CRM"),
+        payload: action.payload && typeof action.payload === "object" ? action.payload : {},
+      }))
+      .filter((action) => ACTION_TYPES.has(action.type)),
   };
+}
+
+function serializableData(doc) {
+  const data = doc.data();
+  return Object.fromEntries(
+    Object.entries(data).map(([key, value]) => [
+      key,
+      value?.toDate ? value.toDate().toISOString() : value,
+    ])
+  );
 }
 
 async function buildPlan(instruction, fileText = "") {
@@ -61,34 +95,44 @@ async function buildPlan(instruction, fileText = "") {
         scoreTotal: p.scoreTotal ?? null, notes: String(p.notes || "").slice(0, 240),
       };
     }),
-    tasks: tasksSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
-    sessions: sessionsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    tasks: tasksSnap.docs.map((d) => ({ id: d.id, ...serializableData(d) })),
+    sessions: sessionsSnap.docs.map((d) => ({ id: d.id, ...serializableData(d) })),
   };
 
   const system = `Tu es l’agent opérationnel du CRM Alpinia Web Craft.
-Tu transformes une instruction en actions CRM précises. Tu ne réponds qu’en JSON valide, sans markdown.
+Tu peux analyser l’état du CRM, répondre à une question, puis transformer une instruction en actions précises.
+Tu ne modifies jamais le code de l’application. Tu ne réponds qu’en JSON valide, sans markdown.
 
 Format obligatoire :
-{"summary":"résumé bref en français","actions":[{"type":"prospect.create|prospect.update|task.create|session.create","targetId":"id ou null","description":"description lisible","payload":{}}]}
+{"summary":"réponse ou résumé bref et utile en français","actions":[{"type":"type autorisé","targetId":"id ou null","description":"description lisible et précise","payload":{}}]}
+
+Types autorisés :
+- prospect.create, prospect.update, prospect.add_note
+- task.create, task.update, task.complete
+- session.create, session.update
+- settings.notifications.update
 
 Règles :
 - N’invente jamais un targetId : utilise exactement un id présent dans l’état CRM.
-- prospect.create payload : name obligatoire, puis type, canton, city, address, contactName, phone, email, website, pipelineStatus, notes, criteria si disponibles.
+- Pour une simple question ou analyse, retourne une réponse dans summary et zéro action.
+- prospect.create payload : name obligatoire, puis type, canton, city, address, contactName, phone, email, website, pipelineStatus, notes si disponibles.
 - prospect.update payload : uniquement les champs à changer.
+- prospect.add_note payload : note obligatoire. Cette action ajoute la note sans effacer les notes existantes.
 - task.create payload : title obligatoire, dueDate au format YYYY-MM-DD ou null, prospectId/prospectName si lié.
+- task.update payload : title, dueDate, prospectId ou prospectName. task.complete ne requiert aucun payload.
 - session.create payload : date YYYY-MM-DD, startTime HH:mm, durationMinutes, prospectIds.
+- session.update utilise les mêmes champs.
+- settings.notifications.update payload : ruleId parmi sessionReminder, callbackDue, inactivityReminder, highScoreImport, quoteFollowup ; patch contient enabled et/ou le seuil accepté par la règle.
+- Une instruction collective devient plusieurs actions ciblées. Maximum 100 actions.
 - Pour “tous les prospects où il y a 💸”, utilise uniquement les lignes du fichier qui contiennent réellement 💸.
-- Ne supprime jamais de données. Si l’instruction est ambiguë, propose zéro action et explique-le dans summary.
+- N’efface jamais de données sans demande explicite. Si l’instruction est ambiguë, propose zéro action et explique-le dans summary.
 - Date actuelle : ${new Date().toISOString().slice(0, 10)}.`;
 
   const user = `INSTRUCTION :
 ${instruction}
 
 ÉTAT CRM :
-${JSON.stringify(state)}
-
-CONTENU DU FICHIER ÉVENTUEL :
-${fileText || "(aucun fichier texte fourni)"}`;
+${JSON.stringify(state)}${fileText ? `\n\nCONTENU DU FICHIER FOURNI :\n${fileText}` : "\n\nAUCUN FICHIER FOURNI : traite l’instruction uniquement avec l’état du CRM."}`;
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -103,7 +147,6 @@ ${fileText || "(aucun fichier texte fourni)"}`;
         { role: "system", content: [{ type: "input_text", text: system }] },
         { role: "user", content: [{ type: "input_text", text: user }] },
       ],
-      text: { format: { type: "json_object" } },
     }),
   });
 
@@ -113,7 +156,13 @@ ${fileText || "(aucun fichier texte fourni)"}`;
     error.statusCode = 502;
     throw error;
   }
-  return parsePlan(extractOutputText(data));
+  try {
+    return parsePlan(extractOutputText(data));
+  } catch (cause) {
+    const error = new Error(cause.message || "L’agent n’a pas renvoyé un plan exploitable.");
+    error.statusCode = 502;
+    throw error;
+  }
 }
 
 async function executeActions(actions) {
@@ -121,9 +170,14 @@ async function executeActions(actions) {
   const results = [];
 
   for (const action of actions.slice(0, 100)) {
+    if (!ACTION_TYPES.has(action.type)) throw new Error(`Action non autorisée : ${action.type}`);
+
     if (action.type === "prospect.create") {
       const payload = cleanObject(action.payload, PROSPECT_FIELDS);
       if (!String(payload.name || "").trim()) throw new Error("Nom requis pour créer un prospect.");
+      if (payload.pipelineStatus && !PIPELINE_STATUSES.has(payload.pipelineStatus)) {
+        throw new Error("Statut pipeline invalide.");
+      }
       const ref = await db.collection("prospects").add({
         ...payload,
         pipelineStatus: payload.pipelineStatus || "a_contacter",
@@ -140,9 +194,30 @@ async function executeActions(actions) {
     if (action.type === "prospect.update") {
       if (!action.targetId) throw new Error("Prospect cible manquant.");
       const patch = cleanObject(action.payload, PROSPECT_FIELDS);
+      if (patch.pipelineStatus && !PIPELINE_STATUSES.has(patch.pipelineStatus)) {
+        throw new Error("Statut pipeline invalide.");
+      }
       await db.collection("prospects").doc(action.targetId).update({
         ...patch,
         updatedAt: FieldValue.serverTimestamp(),
+      });
+      results.push({ type: action.type, id: action.targetId, description: action.description });
+      continue;
+    }
+
+    if (action.type === "prospect.add_note") {
+      if (!action.targetId) throw new Error("Prospect cible manquant.");
+      const note = String(action.payload?.note || "").trim();
+      if (!note) throw new Error("Note requise.");
+      const ref = db.collection("prospects").doc(action.targetId);
+      await db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(ref);
+        if (!snapshot.exists) throw new Error("Prospect introuvable.");
+        const current = String(snapshot.data().notes || "").trim();
+        transaction.update(ref, {
+          notes: current ? `${current}\n\n${note}` : note,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
       });
       results.push({ type: action.type, id: action.targetId, description: action.description });
       continue;
@@ -163,6 +238,16 @@ async function executeActions(actions) {
       continue;
     }
 
+    if (action.type === "task.update" || action.type === "task.complete") {
+      if (!action.targetId) throw new Error("Tâche cible manquante.");
+      const patch = action.type === "task.complete"
+        ? { done: true }
+        : cleanObject(action.payload, TASK_FIELDS);
+      await db.collection("tasks").doc(action.targetId).update(patch);
+      results.push({ type: action.type, id: action.targetId, description: action.description });
+      continue;
+    }
+
     if (action.type === "session.create") {
       const { date, startTime, durationMinutes, prospectIds } = action.payload || {};
       if (!date || !startTime) throw new Error("Date et heure requises pour une session.");
@@ -177,7 +262,30 @@ async function executeActions(actions) {
       continue;
     }
 
-    throw new Error(`Action non autorisée : ${action.type}`);
+    if (action.type === "session.update") {
+      if (!action.targetId) throw new Error("Session cible manquante.");
+      const patch = cleanObject(action.payload, SESSION_FIELDS);
+      if (patch.status && !SESSION_STATUSES.has(patch.status)) throw new Error("Statut de session invalide.");
+      if (patch.durationMinutes !== undefined) patch.durationMinutes = Number(patch.durationMinutes) || 60;
+      if (patch.prospectIds !== undefined && !Array.isArray(patch.prospectIds)) patch.prospectIds = [];
+      await db.collection("sessions").doc(action.targetId).update(patch);
+      results.push({ type: action.type, id: action.targetId, description: action.description });
+      continue;
+    }
+
+    if (action.type === "settings.notifications.update") {
+      const ruleId = String(action.payload?.ruleId || "");
+      const allowed = SETTING_RULES[ruleId];
+      if (!allowed) throw new Error("Réglage de notification inconnu.");
+      const patch = cleanObject(action.payload?.patch, allowed);
+      if (patch.enabled !== undefined) patch.enabled = Boolean(patch.enabled);
+      for (const key of ["minutesBefore", "days", "threshold"]) {
+        if (patch[key] !== undefined) patch[key] = Math.max(0, Number(patch[key]) || 0);
+      }
+      await db.collection("settings").doc("notifications").set({ [ruleId]: patch }, { merge: true });
+      results.push({ type: action.type, id: ruleId, description: action.description });
+      continue;
+    }
   }
 
   return results;
