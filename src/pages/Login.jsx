@@ -30,6 +30,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(email, password);
+      window.location.replace("/");
     } catch (err) {
       setError(AUTH_ERROR_MESSAGES[err.code] || `Erreur de connexion : ${err.code || err.message}`);
     } finally {
@@ -38,17 +39,27 @@ export default function Login() {
   }
 
   return (
-    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>
-      <form onSubmit={handleSubmit} className="card" style={{ width: 320 }}>
-        <h2 style={{ marginTop: 0 }}>AWC CRM</h2>
-        <label>Email</label>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <label>Mot de passe</label>
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        {error && <p style={{ color: "var(--danger)", fontSize: 13 }}>{error}</p>}
-        <button className="primary" type="submit" disabled={loading} style={{ marginTop: 16, width: "100%" }}>
-          {loading ? "Connexion..." : "Se connecter"}
+    <div className="login-page">
+      <div className="login-orb login-orb-orange" />
+      <div className="login-orb login-orb-blue" />
+      <form onSubmit={handleSubmit} className="login-card">
+        <div className="login-brand">
+          <span className="brand-mark">A</span>
+          <span>Alpinia CRM<span className="brand-dot">.</span></span>
+        </div>
+        <div className="eyebrow">Espace commercial</div>
+        <h1>Bon retour.</h1>
+        <p className="login-intro">Prospects, cold calls et prochaines actions — au même endroit.</p>
+        <label htmlFor="login-email">Email</label>
+        <input id="login-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <label htmlFor="login-password">Mot de passe</label>
+        <input id="login-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        {error && <p className="form-error">{error}</p>}
+        <button className="primary login-submit" type="submit" disabled={loading}>
+          {loading ? "Connexion..." : "Me connecter"}
+          <span aria-hidden="true">→</span>
         </button>
+        <p className="login-secure">Connexion sécurisée · Firebase</p>
       </form>
     </div>
   );
