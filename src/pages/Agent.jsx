@@ -5,6 +5,8 @@ const ACTION_LABELS = {
   "prospect.create": "Créer un prospect",
   "prospect.update": "Modifier un prospect",
   "prospect.add_note": "Ajouter une note",
+  "prospect.archive": "Archiver un prospect",
+  "prospect.restore": "Restaurer un prospect",
   "task.create": "Ajouter une tâche",
   "task.update": "Modifier une tâche",
   "task.complete": "Terminer une tâche",
@@ -153,6 +155,19 @@ export default function Agent() {
       </form>
 
       {message && <div className="card agent-message">{message}</div>}
+
+      {plan?.sources?.length > 0 && (
+        <div className="card agent-sources">
+          <strong>Sources web consultées</strong>
+          <div className="agent-source-list">
+            {plan.sources.map((source) => (
+              <a key={source.url} href={source.url} target="_blank" rel="noreferrer">
+                {source.title || source.url}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {plan?.actions?.length > 0 && (
         <div className="card agent-plan">

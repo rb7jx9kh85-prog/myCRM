@@ -10,6 +10,7 @@ import { PIPELINE_STATUSES, ESTABLISHMENT_TYPE_OPTIONS, CANTONS } from "../confi
 import ScoreBadge from "../components/ScoreBadge";
 import ProspectTasks from "../components/ProspectTasks";
 import ProspectFiles from "../components/ProspectFiles";
+import { subscribeProspectVersions } from "../lib/prospectHistory";
 
 const EMPTY = {
   name: "",
@@ -40,6 +41,7 @@ export default function ProspectDetail() {
   const isNew = !id;
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(!isNew);
+  const [versions, setVersions] = useState([]);
 
   useEffect(() => {
     if (isNew) return;
@@ -47,6 +49,11 @@ export default function ProspectDetail() {
       if (snap.exists()) setForm({ ...EMPTY, ...snap.data() });
       setLoading(false);
     });
+  }, [id, isNew]);
+
+  useEffect(() => {
+    if (isNew) return undefined;
+    return subscribeProspectVersions(id, setVersions);
   }, [id, isNew]);
 
   const { total, redFlags, autoExcluded } = computeScore(form.criteria);
@@ -67,7 +74,7 @@ export default function ProspectDetail() {
   }
 
   async function handleDelete() {
-    if (!confirm("Supprimer ce prospect ?")) return;
+    if (!confirm("Archiver ce prospect ? Il restera récupérable dans l’historique.")) return;
     await deleteProspect(id);
     navigate("/prospects");
   }
@@ -78,7 +85,7 @@ export default function ProspectDetail() {
     <form onSubmit={handleSave} style={{ maxWidth: 640 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1>{isNew ? "Nouveau prospect" : form.name}</h1>
-        {!isNew && <button type="button" className="danger" onClick={handleDelete}>Supprimer</button>}
+        {!isNew && <button type="button" className="danger" onClick={handleDelete}>Archiver</button>}
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
@@ -171,6 +178,17 @@ export default function ProspectDetail() {
             onChange={(attachments) => setForm((current) => ({ ...current, attachments }))}
           />
           <ProspectTasks prospectId={id} prospectName={form.name} />
+          <div className="card" style={{ marginTop: 16 }}>
+            <h3 style={{ marginTop: 0 }}>Historique des versions</h3>
+            {versions.length === 0 ? (
+              <p className="muted" style={{ marginBottom: 0 }}>Aucune version enregistrée pour l’instant.</p>
+            ) : versions.map((version) => (
+              <div key={version.id} style={{ borderBottom: "1px solid var(--border)", padding: "8px 0", fontSize: 13 }}>
+                <strong>{version.action === "archived" ? "Prospect archivé" : version.action === "created" ? "Prospect créé" : "Modification enregistrée"}</strong>
+                <div className="muted">{version.actor || "utilisateur"}</div>
+              </div>
+            ))}
+          </div>
         </>
       )}
 

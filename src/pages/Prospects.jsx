@@ -15,6 +15,7 @@ export default function Prospects() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [showExcluded, setShowExcluded] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [checkingWebsites, setCheckingWebsites] = useState(false);
   const [websiteCheckStatus, setWebsiteCheckStatus] = useState("");
   const [checkingPhones, setCheckingPhones] = useState(false);
@@ -96,11 +97,12 @@ export default function Prospects() {
   const filtered = useMemo(() => {
     return prospects.filter((p) => {
       if (!showExcluded && p.autoExcluded) return false;
+      if (!showArchived && p.archived) return false;
       if (statusFilter !== "all" && p.pipelineStatus !== statusFilter) return false;
       if (typeFilter !== "all" && p.type !== typeFilter) return false;
       return true;
     });
-  }, [prospects, statusFilter, typeFilter, showExcluded]);
+  }, [prospects, statusFilter, typeFilter, showExcluded, showArchived]);
 
   return (
     <div>
@@ -127,6 +129,10 @@ export default function Prospects() {
         <label style={{ display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
           <input type="checkbox" style={{ width: "auto" }} checked={showExcluded} onChange={(e) => setShowExcluded(e.target.checked)} />
           Afficher les exclus
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
+          <input type="checkbox" style={{ width: "auto" }} checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+          Afficher les archivés
         </label>
         <button onClick={handleEnrichPhones} disabled={checkingPhones} style={{ marginLeft: "auto" }}>
           {checkingPhones ? "Recherche..." : "Enrichir les numéros de téléphone"}

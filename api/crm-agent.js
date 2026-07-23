@@ -1,11 +1,12 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { requireUser, sendApiError } from "./_apiAuth.js";
+import { RED_FLAGS, SCORING_CRITERIA } from "../src/config/icpScoring.js";
 
 const PROSPECT_FIELDS = new Set([
   "name", "type", "canton", "city", "address", "contactName", "phone", "email",
   "website", "pipelineStatus", "notes", "needsReservation", "strongVisualIdentity",
-  "multiLocation", "nextCallDate",
+  "multiLocation", "nextCallDate", "websiteCheck", "criteria", "attachments",
 ]);
 const TASK_FIELDS = new Set(["title", "dueDate", "done", "prospectId", "prospectName"]);
 const SESSION_FIELDS = new Set(["date", "startTime", "durationMinutes", "prospectIds", "status"]);
@@ -20,6 +21,7 @@ const SETTING_RULES = {
 };
 const ACTION_TYPES = new Set([
   "prospect.create", "prospect.update", "prospect.add_note",
+  "prospect.archive", "prospect.restore",
   "task.create", "task.update", "task.complete",
   "session.create", "session.update",
   "settings.notifications.update",
@@ -29,6 +31,18 @@ function cleanObject(input, allowed) {
   return Object.fromEntries(
     Object.entries(input || {}).filter(([key, value]) => allowed.has(key) && value !== undefined)
   );
+}
+
+function scorePatch(criteria = {}) {
+  let total = 0;
+  let positive = false;
+  for (const criterion of SCORING_CRITERIA) {
+    if (!criteria[criterion.id]) continue;
+    total += criterion.points;
+    if (criterion.points > 0) positive = true;
+  }
+  const redFlags = RED_FLAGS.filter((flag) => criteria[flag.id]).map((flag) => flag.label);
+  return { scoreTotal: total, redFlags, autoExcluded: redFlags.length > 0 && !positive };
 }
 
 function extractOutputText(data) {
@@ -62,6 +76,44 @@ function parsePlan(text) {
   };
 }
 
+function extractSources(data) {
+  const sources = [];
+  for (const item of data.output || []) {
+    for (const content of item.content || []) {
+      for (const annotation of content.annotations || []) {
+        const url = annotation.url || annotation.url_citation?.url;
+        if (url && !sources.some((source) => source.url === url)) {
+          sources.push({ url, title: annotation.title || annotation.url_citation?.title || url });
+        }
+      }
+    }
+  }
+  return sources.slice(0, 20);
+}
+
+function estimateCostUsd(inputText, maxOutputTokens) {
+  const inputTokens = Math.ceil(inputText.length / 4);
+  const inputRate = Number(process.env.CRM_AGENT_INPUT_USD_PER_MILLION || 0.25);
+  const outputRate = Number(process.env.CRM_AGENT_OUTPUT_USD_PER_MILLION || 2);
+  return (inputTokens / 1_000_000) * inputRate + (maxOutputTokens / 1_000_000) * outputRate;
+}
+
+function historySafe(value) {
+  if (value === undefined) return null;
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map(historySafe);
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, historySafe(item)]));
+}
+
+async function saveProspectVersion(db, prospectId, snapshot, action, actor = "agent") {
+  await db.collection("prospects").doc(prospectId).collection("versions").add({
+    action,
+    actor,
+    snapshot: historySafe(snapshot),
+    createdAt: FieldValue.serverTimestamp(),
+  });
+}
+
 function serializableData(doc) {
   const data = doc.data();
   return Object.fromEntries(
@@ -93,6 +145,7 @@ async function buildPlan(instruction, fileText = "") {
         id: d.id, name: p.name || "", city: p.city || "", phone: p.phone || "",
         email: p.email || "", website: p.website || "", pipelineStatus: p.pipelineStatus || "",
         scoreTotal: p.scoreTotal ?? null, notes: String(p.notes || "").slice(0, 240),
+        archived: Boolean(p.archived), websiteCheck: p.websiteCheck || null,
       };
     }),
     tasks: tasksSnap.docs.map((d) => ({ id: d.id, ...serializableData(d) })),
@@ -107,23 +160,27 @@ Format obligatoire :
 {"summary":"réponse ou résumé bref et utile en français","actions":[{"type":"type autorisé","targetId":"id ou null","description":"description lisible et précise","payload":{}}]}
 
 Types autorisés :
-- prospect.create, prospect.update, prospect.add_note
+- prospect.create, prospect.update, prospect.add_note, prospect.archive, prospect.restore
 - task.create, task.update, task.complete
 - session.create, session.update
 - settings.notifications.update
 
 Règles :
 - N’invente jamais un targetId : utilise exactement un id présent dans l’état CRM.
+- Ne cible pas un prospect archivé sauf si l’instruction demande explicitement de le restaurer.
 - Pour une simple question ou analyse, retourne une réponse dans summary et zéro action.
-- prospect.create payload : name obligatoire, puis type, canton, city, address, contactName, phone, email, website, pipelineStatus, notes si disponibles.
+- prospect.create payload : name obligatoire, puis type, canton, city, address, contactName, phone, email, website, pipelineStatus, notes et criteria si disponibles.
 - prospect.update payload : uniquement les champs à changer.
+- Si criteria est modifié, envoie uniquement les critères à changer ; le score et les red flags seront recalculés.
 - prospect.add_note payload : note obligatoire. Cette action ajoute la note sans effacer les notes existantes.
+- prospect.archive met le prospect hors de la liste active sans le supprimer ; prospect.restore le réactive.
 - task.create payload : title obligatoire, dueDate au format YYYY-MM-DD ou null, prospectId/prospectName si lié.
 - task.update payload : title, dueDate, prospectId ou prospectName. task.complete ne requiert aucun payload.
 - session.create payload : date YYYY-MM-DD, startTime HH:mm, durationMinutes, prospectIds.
 - session.update utilise les mêmes champs.
 - settings.notifications.update payload : ruleId parmi sessionReminder, callbackDue, inactivityReminder, highScoreImport, quoteFollowup ; patch contient enabled et/ou le seuil accepté par la règle.
 - Une instruction collective devient plusieurs actions ciblées. Maximum 100 actions.
+- Pour une instruction qui mentionne Google, le web, un site, son ouverture ou son statut actuel, utilise l’outil de recherche web et cite les sources dans summary.
 - Pour “tous les prospects où il y a 💸”, utilise uniquement les lignes du fichier qui contiennent réellement 💸.
 - N’efface jamais de données sans demande explicite. Si l’instruction est ambiguë, propose zéro action et explique-le dans summary.
 - Date actuelle : ${new Date().toISOString().slice(0, 10)}.`;
@@ -134,6 +191,17 @@ ${instruction}
 ÉTAT CRM :
 ${JSON.stringify(state)}${fileText ? `\n\nCONTENU DU FICHIER FOURNI :\n${fileText}` : "\n\nAUCUN FICHIER FOURNI : traite l’instruction uniquement avec l’état du CRM."}`;
 
+  const maxOutputTokens = 1800;
+  const estimatedCost = estimateCostUsd(`${system}\n${user}`, maxOutputTokens);
+  const maxCost = Number(process.env.CRM_AGENT_MAX_USD || 0.2);
+  if (estimatedCost > maxCost) {
+    const error = new Error(`Cette requête dépasserait la limite estimée de ${maxCost.toFixed(2)} $. Réduis l’instruction ou le fichier.`);
+    error.statusCode = 402;
+    throw error;
+  }
+
+  const browseRequested = /\b(site|internet|web|google|ouvert|ouverture|actif|en ligne|vérif|vérifie|recherche|cherche|avis|horaires|actualité)\b/i.test(instruction);
+
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
@@ -143,6 +211,8 @@ ${JSON.stringify(state)}${fileText ? `\n\nCONTENU DU FICHIER FOURNI :\n${fileTex
     body: JSON.stringify({
       model: process.env.CRM_AGENT_MODEL || process.env.OPENAI_MODEL || "gpt-5.6-terra",
       reasoning: { effort: "medium" },
+      max_output_tokens: maxOutputTokens,
+      ...(browseRequested ? { tools: [{ type: "web_search" }] } : {}),
       input: [
         { role: "system", content: [{ type: "input_text", text: system }] },
         { role: "user", content: [{ type: "input_text", text: user }] },
@@ -157,7 +227,7 @@ ${JSON.stringify(state)}${fileText ? `\n\nCONTENU DU FICHIER FOURNI :\n${fileTex
     throw error;
   }
   try {
-    return parsePlan(extractOutputText(data));
+    return { ...parsePlan(extractOutputText(data)), sources: extractSources(data) };
   } catch (cause) {
     const error = new Error(cause.message || "L’agent n’a pas renvoyé un plan exploitable.");
     error.statusCode = 502;
@@ -180,13 +250,13 @@ async function executeActions(actions) {
       }
       const ref = await db.collection("prospects").add({
         ...payload,
+        ...(payload.criteria ? scorePatch(payload.criteria) : { scoreTotal: 0, redFlags: [], autoExcluded: false }),
         pipelineStatus: payload.pipelineStatus || "a_contacter",
-        scoreTotal: 0,
-        redFlags: [],
-        autoExcluded: false,
+        archived: false,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
+      await saveProspectVersion(db, ref.id, payload, "created");
       results.push({ type: action.type, id: ref.id, description: action.description });
       continue;
     }
@@ -197,9 +267,45 @@ async function executeActions(actions) {
       if (patch.pipelineStatus && !PIPELINE_STATUSES.has(patch.pipelineStatus)) {
         throw new Error("Statut pipeline invalide.");
       }
-      await db.collection("prospects").doc(action.targetId).update({
-        ...patch,
-        updatedAt: FieldValue.serverTimestamp(),
+      const ref = db.collection("prospects").doc(action.targetId);
+      await db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(ref);
+        if (!snapshot.exists) throw new Error("Prospect introuvable.");
+        const merged = patch.criteria
+          ? { ...patch, criteria: { ...(snapshot.data().criteria || {}), ...patch.criteria }, ...scorePatch({ ...(snapshot.data().criteria || {}), ...patch.criteria }) }
+          : patch;
+        transaction.update(ref, { ...merged, updatedAt: FieldValue.serverTimestamp() });
+        const versionRef = ref.collection("versions").doc();
+        transaction.set(versionRef, {
+          action: "updated",
+          actor: "agent",
+          snapshot: historySafe(snapshot.data()),
+          patch: historySafe(merged),
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      });
+      results.push({ type: action.type, id: action.targetId, description: action.description });
+      continue;
+    }
+
+    if (action.type === "prospect.archive" || action.type === "prospect.restore") {
+      if (!action.targetId) throw new Error("Prospect cible manquant.");
+      const ref = db.collection("prospects").doc(action.targetId);
+      const archived = action.type === "prospect.archive";
+      await db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(ref);
+        if (!snapshot.exists) throw new Error("Prospect introuvable.");
+        const patch = archived
+          ? { archived: true, archivedReason: String(action.payload?.reason || "Archivé par l’agent."), archivedAt: FieldValue.serverTimestamp() }
+          : { archived: false, archivedReason: null, archivedAt: null };
+        transaction.update(ref, { ...patch, updatedAt: FieldValue.serverTimestamp() });
+        transaction.set(ref.collection("versions").doc(), {
+          action: archived ? "archived" : "restored",
+          actor: "agent",
+          snapshot: historySafe(snapshot.data()),
+          patch: historySafe(patch),
+          createdAt: FieldValue.serverTimestamp(),
+        });
       });
       results.push({ type: action.type, id: action.targetId, description: action.description });
       continue;
@@ -214,9 +320,17 @@ async function executeActions(actions) {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists) throw new Error("Prospect introuvable.");
         const current = String(snapshot.data().notes || "").trim();
+        const versionRef = ref.collection("versions").doc();
         transaction.update(ref, {
           notes: current ? `${current}\n\n${note}` : note,
           updatedAt: FieldValue.serverTimestamp(),
+        });
+        transaction.set(versionRef, {
+          action: "note_added",
+          actor: "agent",
+          snapshot: historySafe(snapshot.data()),
+          patch: { note },
+          createdAt: FieldValue.serverTimestamp(),
         });
       });
       results.push({ type: action.type, id: action.targetId, description: action.description });
