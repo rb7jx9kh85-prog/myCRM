@@ -11,6 +11,7 @@ import Planning from "./pages/Planning";
 import Suggestions from "./pages/Suggestions";
 import Tasks from "./pages/Tasks";
 import Settings from "./pages/Settings";
+import Agent from "./pages/Agent";
 
 function PrivateRoutes() {
   const { user, loading } = useAuth();
@@ -35,6 +36,7 @@ export default function App() {
             <Route path="/planning" element={<Planning />} />
             <Route path="/suggestions" element={<Suggestions />} />
             <Route path="/taches" element={<Tasks />} />
+            <Route path="/agent" element={<Agent />} />
             <Route path="/reglages" element={<Settings />} />
           </Route>
         </Routes>
