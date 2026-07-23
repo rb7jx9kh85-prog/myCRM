@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "./_firebaseAdmin.js";
 import { requireUser, sendApiError } from "./_apiAuth.js";
+import { RED_FLAGS, SCORING_CRITERIA } from "../src/config/icpScoring.js";
 
 const PROSPECT_FIELDS = new Set([
   "name", "type", "canton", "city", "address", "contactName", "phone", "email",
@@ -30,6 +31,18 @@ function cleanObject(input, allowed) {
   return Object.fromEntries(
     Object.entries(input || {}).filter(([key, value]) => allowed.has(key) && value !== undefined)
   );
+}
+
+function scorePatch(criteria = {}) {
+  let total = 0;
+  let positive = false;
+  for (const criterion of SCORING_CRITERIA) {
+    if (!criteria[criterion.id]) continue;
+    total += criterion.points;
+    if (criterion.points > 0) positive = true;
+  }
+  const redFlags = RED_FLAGS.filter((flag) => criteria[flag.id]).map((flag) => flag.label);
+  return { scoreTotal: total, redFlags, autoExcluded: redFlags.length > 0 && !positive };
 }
 
 function extractOutputText(data) {
@@ -156,8 +169,9 @@ Règles :
 - N’invente jamais un targetId : utilise exactement un id présent dans l’état CRM.
 - Ne cible pas un prospect archivé sauf si l’instruction demande explicitement de le restaurer.
 - Pour une simple question ou analyse, retourne une réponse dans summary et zéro action.
-- prospect.create payload : name obligatoire, puis type, canton, city, address, contactName, phone, email, website, pipelineStatus, notes si disponibles.
+- prospect.create payload : name obligatoire, puis type, canton, city, address, contactName, phone, email, website, pipelineStatus, notes et criteria si disponibles.
 - prospect.update payload : uniquement les champs à changer.
+- Si criteria est modifié, envoie uniquement les critères à changer ; le score et les red flags seront recalculés.
 - prospect.add_note payload : note obligatoire. Cette action ajoute la note sans effacer les notes existantes.
 - prospect.archive met le prospect hors de la liste active sans le supprimer ; prospect.restore le réactive.
 - task.create payload : title obligatoire, dueDate au format YYYY-MM-DD ou null, prospectId/prospectName si lié.
@@ -236,11 +250,9 @@ async function executeActions(actions) {
       }
       const ref = await db.collection("prospects").add({
         ...payload,
+        ...(payload.criteria ? scorePatch(payload.criteria) : { scoreTotal: 0, redFlags: [], autoExcluded: false }),
         pipelineStatus: payload.pipelineStatus || "a_contacter",
         archived: false,
-        scoreTotal: 0,
-        redFlags: [],
-        autoExcluded: false,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
@@ -259,13 +271,16 @@ async function executeActions(actions) {
       await db.runTransaction(async (transaction) => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists) throw new Error("Prospect introuvable.");
-        transaction.update(ref, { ...patch, updatedAt: FieldValue.serverTimestamp() });
+        const merged = patch.criteria
+          ? { ...patch, criteria: { ...(snapshot.data().criteria || {}), ...patch.criteria }, ...scorePatch({ ...(snapshot.data().criteria || {}), ...patch.criteria }) }
+          : patch;
+        transaction.update(ref, { ...merged, updatedAt: FieldValue.serverTimestamp() });
         const versionRef = ref.collection("versions").doc();
         transaction.set(versionRef, {
           action: "updated",
           actor: "agent",
           snapshot: historySafe(snapshot.data()),
-          patch: historySafe(patch),
+          patch: historySafe(merged),
           createdAt: FieldValue.serverTimestamp(),
         });
       });
