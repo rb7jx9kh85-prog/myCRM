@@ -4,9 +4,20 @@ import { auth } from "../firebase";
 const ACTION_LABELS = {
   "prospect.create": "Créer un prospect",
   "prospect.update": "Modifier un prospect",
+  "prospect.add_note": "Ajouter une note",
   "task.create": "Ajouter une tâche",
+  "task.update": "Modifier une tâche",
+  "task.complete": "Terminer une tâche",
   "session.create": "Planifier une session",
+  "session.update": "Modifier une session",
+  "settings.notifications.update": "Modifier une notification",
 };
+const SUGGESTIONS = [
+  "Quels prospects dois-je appeler en priorité aujourd’hui ?",
+  "Crée les tâches de relance utiles pour demain.",
+  "Prépare une session de cold call vendredi à 14h avec les meilleurs prospects.",
+  "Ajoute une note aux prospects qui ont déjà été contactés.",
+];
 
 async function apiRequest(body) {
   const token = await auth.currentUser?.getIdToken();
@@ -68,9 +79,10 @@ export default function Agent() {
     setMessage("");
     setPlan(null);
     try {
+      const preparedFile = prepareTextFile(file, fileText, instruction);
       const data = await apiRequest({
         instruction,
-        fileText: prepareTextFile(file, fileText, instruction),
+        ...(preparedFile ? { fileText: preparedFile } : {}),
       });
       setPlan(data);
       if (!data.actions.length) setMessage(data.summary);
@@ -120,6 +132,13 @@ export default function Agent() {
           onChange={(event) => setInstruction(event.target.value)}
           placeholder="Ex. Ajoute tous les prospects du CSV qui ont 💸, crée une tâche pour les appeler demain et prépare une session de cold call vendredi à 14h."
         />
+        <div className="agent-suggestions" aria-label="Suggestions d’instructions">
+          {SUGGESTIONS.map((suggestion) => (
+            <button type="button" key={suggestion} onClick={() => setInstruction(suggestion)}>
+              {suggestion}
+            </button>
+          ))}
+        </div>
         <div className="agent-controls">
           <label className="file-picker">
             <input type="file" onChange={handleFile} />
@@ -130,7 +149,7 @@ export default function Agent() {
             {loading ? "Analyse en cours…" : "Préparer les actions"}
           </button>
         </div>
-        <p className="agent-hint">Fichiers jusqu’à 2 Mo. L’agent peut lire CSV, TXT, JSON et Markdown.</p>
+        <p className="agent-hint"><strong>Aucun fichier requis.</strong> Si utile, joins un CSV, TXT, JSON ou Markdown jusqu’à 2 Mo.</p>
       </form>
 
       {message && <div className="card agent-message">{message}</div>}
