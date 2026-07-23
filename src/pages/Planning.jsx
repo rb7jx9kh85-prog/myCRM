@@ -87,7 +87,7 @@ export default function Planning() {
         <button onClick={() => setWeekStart((d) => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; })}>Semaine suiv. →</button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 8 }}>
+      <div className="planning-grid">
         {days.map((d) => {
           const dayStr = fmt(d);
           const daySessions = sessions.filter((s) => s.date === dayStr);
