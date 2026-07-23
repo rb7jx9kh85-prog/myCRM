@@ -8,6 +8,8 @@ import {
   query,
   orderBy,
   serverTimestamp,
+  arrayUnion,
+  arrayRemove,
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { computeScore } from "./scoring";
@@ -75,6 +77,20 @@ export async function updateProspect(id, input) {
 
 export async function deleteProspect(id) {
   return deleteDoc(doc(db, "prospects", id));
+}
+
+export async function addProspectAttachment(id, attachment) {
+  return updateDoc(doc(db, "prospects", id), {
+    attachments: arrayUnion(attachment),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function removeProspectAttachment(id, attachment) {
+  return updateDoc(doc(db, "prospects", id), {
+    attachments: arrayRemove(attachment),
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function logCallOutcome(id, nextStatus, callbackDate) {
