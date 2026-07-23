@@ -4,15 +4,17 @@
 // encodé en une seule ligne, à définir dans Vercel > Environment Variables.
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 
 function getAdminApp() {
   if (getApps().length) return getApps()[0];
-  if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-    throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY manquante dans les variables d'environnement Vercel.");
+  const rawServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!rawServiceAccount) {
+    throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY ou FIREBASE_SERVICE_ACCOUNT manque dans Vercel.");
   }
   let serviceAccount;
   try {
-    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+    serviceAccount = JSON.parse(rawServiceAccount);
   } catch {
     throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY n'est pas un JSON valide (vérifie qu'elle a été collée en entier, sans guillemets autour).");
   }
@@ -21,4 +23,8 @@ function getAdminApp() {
 
 export function getAdminDb() {
   return getFirestore(getAdminApp());
+}
+
+export function getAdminAuth() {
+  return getAuth(getAdminApp());
 }
