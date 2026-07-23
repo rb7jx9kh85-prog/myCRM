@@ -314,6 +314,7 @@ label {
 .agent-suggestions button { min-height: 34px; flex: 0 0 auto; max-width: 280px; padding: 6px 11px; color: #b9c8e8; font-size: 11px; font-weight: 600; }
 .agent-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
 .agent-controls .primary { margin-left: auto; }
+.agent-direct-toggle { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; color: #b9c8e8; }
 .file-picker {
   display: inline-flex;
   margin: 0;
