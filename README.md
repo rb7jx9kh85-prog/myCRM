@@ -33,7 +33,9 @@ pas secrète en soi, mais les clés Geoapify/Google/Firebase Admin le sont.
 | `CRON_SECRET` | Choisis une chaîne aléatoire toi-même | **Oui** |
 | `OPENAI_API_KEY` | Ta clé OpenAI existante | **Oui** |
 | `OPENAI_MODEL` | Optionnel, défaut `gpt-4o-mini` — change si tu préfères un autre modèle | Non |
+| `CRM_AGENT_MODEL` | Modèle de l'agent opérationnel, recommandé : `gpt-5.6-terra` | Non |
 | `OPENAI_MODEL_WEBSITE_CHECK` | Optionnel, défaut `gpt-3.5-turbo` — modèle utilisé pour la vérification (bon marché) des sites web des prospects | Non |
+| `BLOB_READ_WRITE_TOKEN` | Vercel → Storage → Blob Store, généralement ajouté automatiquement au projet lié | **Oui** |
 
 Après avoir tout ajouté : redéploie le projet pour que les variables soient prises en compte.
 
@@ -169,6 +171,26 @@ Un résumé (en retard, dues aujourd'hui, total) apparaît sur le tableau de
 bord. Chaque fiche prospect affiche aussi ses tâches liées avec ajout rapide
 (`src/components/ProspectTasks.jsx`). Collection Firestore `tasks`, couverte
 par la même règle de sécurité que le reste (`firestore.rules`).
+
+## Agent IA opérationnel
+
+L'écran « Agent IA » transforme une instruction en plan d'actions :
+création ou modification de prospects, ajout de tâches et planification de
+sessions de cold call. L'agent utilise `CRM_AGENT_MODEL` avec un effort de
+raisonnement `medium`. Il affiche toujours son plan avant écriture ; aucune
+action n'est appliquée sans confirmation.
+
+Un CSV, TXT, JSON ou Markdown de 2 Mo maximum peut accompagner l'instruction.
+Pour une consigne telle que « ajoute tous les prospects où il y a 💸 », le
+frontend ne transmet à l'agent que l'en-tête et les lignes contenant ce
+marqueur, afin de réduire les coûts et d'éviter d'importer les autres lignes.
+
+## Fichiers et médias des prospects
+
+Chaque fiche prospect accepte des pièces jointes courantes jusqu'à 2 Mo.
+Les octets sont stockés dans un Vercel Blob privé ; Firestore ne conserve que
+les métadonnées. L'envoi, la lecture et la suppression exigent un jeton
+Firebase valide, et les chemins Blob sont isolés par UID.
 
 ## Développement local
 

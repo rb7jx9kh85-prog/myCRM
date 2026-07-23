@@ -9,6 +9,7 @@ import { SCORING_CRITERIA, RED_FLAGS, EXTRA_RED_FLAG_FIELDS } from "../config/ic
 import { PIPELINE_STATUSES, ESTABLISHMENT_TYPE_OPTIONS, CANTONS } from "../config/pipeline";
 import ScoreBadge from "../components/ScoreBadge";
 import ProspectTasks from "../components/ProspectTasks";
+import ProspectFiles from "../components/ProspectFiles";
 
 const EMPTY = {
   name: "",
@@ -26,6 +27,7 @@ const EMPTY = {
   strongVisualIdentity: false,
   multiLocation: false,
   criteria: {},
+  attachments: [],
 };
 
 // Champs red flag qui ne font pas déjà partie de la grille de score
@@ -161,7 +163,16 @@ export default function ProspectDetail() {
         <textarea rows={4} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
       </div>
 
-      {!isNew && <ProspectTasks prospectId={id} prospectName={form.name} />}
+      {!isNew && (
+        <>
+          <ProspectFiles
+            prospectId={id}
+            attachments={form.attachments || []}
+            onChange={(attachments) => setForm((current) => ({ ...current, attachments }))}
+          />
+          <ProspectTasks prospectId={id} prospectName={form.name} />
+        </>
+      )}
 
       <button className="primary" type="submit" style={{ marginTop: 16 }}>
         {isNew ? "Créer le prospect" : "Enregistrer"}
