@@ -3,7 +3,7 @@ import {
   doc,
   addDoc,
   updateDoc,
-  deleteDoc,
+  getDoc,
   onSnapshot,
   query,
   orderBy,
@@ -14,6 +14,7 @@ import {
 import { db } from "../firebase";
 import { computeScore } from "./scoring";
 import { recommend, OFFERS } from "../config/recommendationEngine";
+import { recordProspectVersion } from "./prospectHistory";
 
 const prospectsCol = collection(db, "prospects");
 
@@ -59,45 +60,73 @@ export function subscribeProspects(callback) {
 
 export async function createProspect(input) {
   const payload = buildProspectPayload(input);
-  return addDoc(prospectsCol, {
+  const ref = await addDoc(prospectsCol, {
     ...payload,
     pipelineStatus: input.pipelineStatus || "a_contacter",
+    archived: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+  await recordProspectVersion(ref.id, payload, "created");
+  return ref;
 }
 
 export async function updateProspect(id, input) {
   const payload = buildProspectPayload(input);
-  return updateDoc(doc(db, "prospects", id), {
+  const ref = doc(db, "prospects", id);
+  const previous = await getDoc(ref);
+  const result = await updateDoc(ref, {
     ...payload,
     updatedAt: serverTimestamp(),
   });
+  await recordProspectVersion(id, previous.exists() ? previous.data() : input, "updated");
+  return result;
 }
 
 export async function deleteProspect(id) {
-  return deleteDoc(doc(db, "prospects", id));
+  const ref = doc(db, "prospects", id);
+  const previous = await getDoc(ref);
+  const result = await updateDoc(ref, {
+    archived: true,
+    archivedReason: "Archivé depuis la fiche prospect.",
+    archivedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  await recordProspectVersion(id, previous.exists() ? previous.data() : {}, "archived");
+  return result;
 }
 
 export async function addProspectAttachment(id, attachment) {
-  return updateDoc(doc(db, "prospects", id), {
+  const ref = doc(db, "prospects", id);
+  const previous = await getDoc(ref);
+  const result = await updateDoc(ref, {
     attachments: arrayUnion(attachment),
     updatedAt: serverTimestamp(),
   });
+  await recordProspectVersion(id, previous.exists() ? previous.data() : {}, "attachment_added");
+  return result;
 }
 
 export async function removeProspectAttachment(id, attachment) {
-  return updateDoc(doc(db, "prospects", id), {
+  const ref = doc(db, "prospects", id);
+  const previous = await getDoc(ref);
+  const result = await updateDoc(ref, {
     attachments: arrayRemove(attachment),
     updatedAt: serverTimestamp(),
   });
+  await recordProspectVersion(id, previous.exists() ? previous.data() : {}, "attachment_removed");
+  return result;
 }
 
 export async function logCallOutcome(id, nextStatus, callbackDate) {
-  return updateDoc(doc(db, "prospects", id), {
+  const ref = doc(db, "prospects", id);
+  const previous = await getDoc(ref);
+  const result = await updateDoc(ref, {
     pipelineStatus: nextStatus,
     lastContactDate: serverTimestamp(),
     ...(callbackDate ? { nextCallDate: callbackDate } : {}),
     updatedAt: serverTimestamp(),
   });
+  await recordProspectVersion(id, previous.exists() ? previous.data() : {}, "call_outcome");
+  return result;
 }
