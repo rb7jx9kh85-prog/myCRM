@@ -333,6 +333,9 @@ label {
 .file-pill { font-size: 12px; color: #8bb4ff; background: var(--blue-soft); border-radius: 999px; padding: 6px 10px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-hint { color: var(--text-muted); font-size: 11px; margin: 10px 0 0; }
 .agent-message { margin-top: 16px; color: #a9c4ff; }
+.agent-sources { margin-top: 16px; color: #b9c8e8; }
+.agent-source-list { display: grid; gap: 6px; margin-top: 8px; }
+.agent-source-list a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .agent-plan { margin-top: 16px; }
 .agent-plan h2 { margin: 6px 0; }
 .agent-action { display: flex; align-items: flex-start; gap: 12px; padding: 13px; border-radius: 16px; border: 1px solid var(--border); background: rgba(255,255,255,.035); }
