@@ -14,6 +14,7 @@ export default function Prospects() {
   const [prospects, setProspects] = useState([]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [showExcluded, setShowExcluded] = useState(false);
   const [checkingWebsites, setCheckingWebsites] = useState(false);
   const [websiteCheckStatus, setWebsiteCheckStatus] = useState("");
@@ -94,13 +95,19 @@ export default function Prospects() {
   }
 
   const filtered = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase("fr-CH");
     return prospects.filter((p) => {
       if (!showExcluded && p.autoExcluded) return false;
       if (statusFilter !== "all" && p.pipelineStatus !== statusFilter) return false;
       if (typeFilter !== "all" && p.type !== typeFilter) return false;
-      return true;
+      if (!query) return true;
+      const searchable = [
+        p.name, p.city, p.type, p.phone, p.email, p.website, p.contact, p.notes,
+        p.recommendation?.offerLabel,
+      ].filter(Boolean).join(" ").toLocaleLowerCase("fr-CH");
+      return searchable.includes(query);
     });
-  }, [prospects, statusFilter, typeFilter, showExcluded]);
+  }, [prospects, statusFilter, typeFilter, showExcluded, searchQuery]);
 
   return (
     <div>
@@ -112,6 +119,25 @@ export default function Prospects() {
       </div>
 
       <div className="card" style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+        <div style={{ position: "relative", flex: "1 1 280px" }}>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Rechercher un prospect : Karyne, téléphone, ville…"
+            aria-label="Rechercher un prospect"
+            style={{ width: "100%", paddingRight: searchQuery ? 42 : undefined }}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              aria-label="Effacer la recherche"
+              title="Effacer la recherche"
+              style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", border: 0, background: "transparent", fontSize: 22, cursor: "pointer", lineHeight: 1 }}
+            >×</button>
+          )}
+        </div>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ width: 180 }}>
           <option value="all">Tous les statuts</option>
           {PIPELINE_STATUSES.map((s) => (
@@ -176,7 +202,9 @@ export default function Prospects() {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={8} style={{ color: "var(--text-muted)" }}>Aucun prospect.</td></tr>
+              <tr><td colSpan={8} style={{ color: "var(--text-muted)" }}>
+                {searchQuery.trim() ? "Aucun prospect ne correspond à « " + searchQuery.trim() + " »." : "Aucun prospect."}
+              </td></tr>
             )}
           </tbody>
         </table>
