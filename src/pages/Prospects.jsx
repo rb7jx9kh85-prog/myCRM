@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { createProspect, deleteProspect, subscribeProspects, updateProspect } from "../lib/prospects";
@@ -66,6 +65,38 @@ export default function Prospects() {
     reader.onload = () => { setImportText(String(reader.result || "")); setShowImport(true); };
     reader.readAsText(file);
     event.target.value = "";
+  }
+
+  function handleExportCsv() {
+    const columns = [
+      ["ID", "id"], ["Nom", "name"], ["Contact", "contactName"], ["Téléphone", "phone"],
+      ["Email", "email"], ["Type", "type"], ["Ville", "city"], ["Canton", "canton"],
+      ["Site web", "website"], ["Score", "scoreTotal"], ["Statut", "pipelineStatus"],
+      ["Archivé", "archived"], ["Exclu automatiquement", "autoExcluded"], ["Notes", "notes"],
+      ["Prochaine action", "nextAction"], ["Date de prochaine action", "nextActionDate"],
+      ["Prestation", "recommendation"], ["Raison d’exclusion", "archivedReason"],
+    ];
+    const escapeCsv = (value) => {
+      if (value === null || value === undefined) return "";
+      const text = typeof value === "object" ? JSON.stringify(value) : String(value);
+      return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+    const rows = prospects.map((prospect) => columns.map(([, key]) => {
+      if (key === "recommendation") return prospect.recommendation?.offerLabel || "";
+      const value = prospect[key];
+      if (key === "nextActionDate" && value?.toDate) return value.toDate().toISOString();
+      if (key === "nextActionDate" && value?.seconds) return new Date(value.seconds * 1000).toISOString();
+      return value;
+    }));
+    const csv = "\uFEFF" + [columns.map(([label]) => label), ...rows].map((row) => row.map(escapeCsv).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `prospects-alpinia-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   }
 
   async function handleEnrichPhones(onlySelected = false) {
@@ -193,6 +224,7 @@ export default function Prospects() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1>Prospects</h1>
         <div className="cluster">
+          <button onClick={handleExportCsv} disabled={!prospects.length}>↓ Exporter tous les prospects</button>
           <button onClick={() => setShowImport((visible) => !visible)}>↥ Importer CSV / texte</button>
           <Link to="/prospects/nouveau"><button className="primary">+ Nouveau prospect</button></Link>
         </div>
