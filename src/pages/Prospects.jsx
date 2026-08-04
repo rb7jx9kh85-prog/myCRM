@@ -1,6 +1,7 @@
+
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { subscribeProspects, updateProspect } from "../lib/prospects";
+import { createProspect, subscribeProspects, updateProspect } from "../lib/prospects";
 import { PIPELINE_STATUSES, ESTABLISHMENT_TYPE_OPTIONS } from "../config/pipeline";
 import ScoreBadge from "../components/ScoreBadge";
 
@@ -20,8 +21,49 @@ export default function Prospects() {
   const [websiteCheckStatus, setWebsiteCheckStatus] = useState("");
   const [checkingPhones, setCheckingPhones] = useState(false);
   const [phoneCheckStatus, setPhoneCheckStatus] = useState("");
+  const [showImport, setShowImport] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importStatus, setImportStatus] = useState("");
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => subscribeProspects(setProspects), []);
+
+  function parseImportedProspects(raw) {
+    const lines = raw.trim().split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    if (!lines.length) return [];
+    const split = (line) => line.split(/[,;\t]/).map((value) => value.trim().replace(/^"|"$/g, ""));
+    const headers = split(lines[0]).map((header) => header.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
+    const knownHeaders = ["nom", "name", "entreprise", "company", "telephone", "phone", "tel", "ville", "city", "type", "site", "website", "email"];
+    const hasHeader = headers.some((header) => knownHeaders.includes(header));
+    const rows = hasHeader ? lines.slice(1) : lines;
+    const index = (...names) => headers.findIndex((header) => names.includes(header));
+    return rows.map((line) => {
+      const values = split(line);
+      if (!hasHeader) return { name: values[0], city: values[1] || "", phone: values[2] || "", website: values[3] || "" };
+      const value = (...names) => { const i = index(...names); return i >= 0 ? values[i] || "" : ""; };
+      return { name: value("nom", "name", "entreprise", "company") || values[0] || "", city: value("ville", "city"), phone: value("telephone", "phone", "tel"), website: value("site", "website"), email: value("email"), type: value("type") };
+    }).filter((prospect) => prospect.name);
+  }
+
+  async function handleImport() {
+    const rows = parseImportedProspects(importText);
+    if (!rows.length) { setImportStatus("Aucun prospect reconnu. Utilise une ligne par prospect ou un CSV avec une colonne Nom."); return; }
+    setImporting(true); setImportStatus(`Import de ${rows.length} prospect(s) en cours...`);
+    try {
+      for (const row of rows) await createProspect({ ...row, criteria: {}, pipelineStatus: "a_contacter", archived: false });
+      setImportText(""); setShowImport(false); setImportStatus(`${rows.length} prospect(s) importé(s).`);
+    } catch { setImportStatus("L’import a échoué. Vérifie ta connexion puis réessaie."); }
+    finally { setImporting(false); }
+  }
+
+  function handleImportFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => { setImportText(String(reader.result || "")); setShowImport(true); };
+    reader.readAsText(file);
+    event.target.value = "";
+  }
 
   async function handleEnrichPhones() {
     const toCheck = prospects.filter((p) => !p.phone && p.geoapifyPlaceId);
@@ -108,10 +150,18 @@ export default function Prospects() {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1>Prospects</h1>
-        <Link to="/prospects/nouveau">
-          <button className="primary">+ Nouveau prospect</button>
-        </Link>
+        <div className="cluster">
+          <button onClick={() => setShowImport((visible) => !visible)}>↥ Importer CSV / texte</button>
+          <Link to="/prospects/nouveau"><button className="primary">+ Nouveau prospect</button></Link>
+        </div>
       </div>
+
+      {showImport && <div className="card import-card">
+        <div className="page-header"><div><h2>Importer des prospects</h2><p className="muted">CSV avec en-têtes (Nom, Téléphone, Ville, Site…) ou une ligne par prospect.</p></div><label className="file-picker"><input type="file" accept=".csv,.txt,text/csv,text/plain" onChange={handleImportFile} /><span>Choisir un fichier</span></label></div>
+        <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder={'Nom, Téléphone, Ville, Site\nBoulangerie Exemple, 079 000 00 00, Sion,\n\nOu simplement une ligne par nom…'} rows={6} />
+        <div className="cluster" style={{ justifyContent: "flex-end", marginTop: 10 }}><button onClick={() => setShowImport(false)}>Annuler</button><button className="primary" onClick={handleImport} disabled={importing}>{importing ? "Import..." : "Importer"}</button></div>
+      </div>}
+      {importStatus && <p className="import-status">{importStatus}</p>}
 
       <div className="card" style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ width: 180 }}>
