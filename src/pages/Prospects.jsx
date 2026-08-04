@@ -1,7 +1,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { createProspect, subscribeProspects, updateProspect } from "../lib/prospects";
+import { createProspect, deleteProspect, subscribeProspects, updateProspect } from "../lib/prospects";
 import { PIPELINE_STATUSES, ESTABLISHMENT_TYPE_OPTIONS } from "../config/pipeline";
 import ScoreBadge from "../components/ScoreBadge";
 
@@ -25,6 +25,9 @@ export default function Prospects() {
   const [importText, setImportText] = useState("");
   const [importStatus, setImportStatus] = useState("");
   const [importing, setImporting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkStatus, setBulkStatus] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   useEffect(() => subscribeProspects(setProspects), []);
 
@@ -65,8 +68,9 @@ export default function Prospects() {
     event.target.value = "";
   }
 
-  async function handleEnrichPhones() {
-    const toCheck = prospects.filter((p) => !p.phone && p.geoapifyPlaceId);
+  async function handleEnrichPhones(onlySelected = false) {
+    const selection = new Set(selectedIds);
+    const toCheck = prospects.filter((p) => (!onlySelected || selection.has(p.id)) && !p.phone && p.geoapifyPlaceId);
     if (toCheck.length === 0) {
       setPhoneCheckStatus("Aucun numéro manquant à compléter (ou prospect importé avant cette fonctionnalité).");
       return;
@@ -100,8 +104,9 @@ export default function Prospects() {
     }
   }
 
-  async function handleCheckWebsites() {
-    const toCheck = prospects.filter((p) => p.website && !p.websiteCheck);
+  async function handleCheckWebsites(onlySelected = false) {
+    const selection = new Set(selectedIds);
+    const toCheck = prospects.filter((p) => (!onlySelected || selection.has(p.id)) && p.website && !p.websiteCheck);
     if (toCheck.length === 0) {
       setWebsiteCheckStatus("Tous les sites web ont déjà été vérifiés.");
       return;
@@ -146,6 +151,43 @@ export default function Prospects() {
     });
   }, [prospects, statusFilter, typeFilter, showExcluded, showArchived]);
 
+  const visibleIds = filtered.map((p) => p.id);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
+
+  function toggleProspect(id) {
+    setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  }
+
+  function toggleAllVisible() {
+    setSelectedIds((current) => {
+      if (allVisibleSelected) return current.filter((id) => !visibleIds.includes(id));
+      return [...new Set([...current, ...visibleIds])];
+    });
+  }
+
+  async function handleBulkStatusChange(event) {
+    const pipelineStatus = event.target.value;
+    if (!pipelineStatus || !selectedIds.length) return;
+    setBulkBusy(true);
+    try {
+      const selected = prospects.filter((p) => selectedIds.includes(p.id));
+      await Promise.all(selected.map((p) => updateProspect(p.id, { ...p, pipelineStatus })));
+      setBulkStatus(`${selected.length} prospect(s) mis à jour.`);
+    } catch { setBulkStatus("La modification groupée a échoué."); }
+    finally { setBulkBusy(false); event.target.value = ""; }
+  }
+
+  async function handleBulkArchive() {
+    if (!selectedIds.length || !window.confirm(`Archiver ${selectedIds.length} prospect(s) sélectionné(s) ?`)) return;
+    setBulkBusy(true);
+    try {
+      await Promise.all(selectedIds.map((id) => deleteProspect(id)));
+      setBulkStatus(`${selectedIds.length} prospect(s) archivé(s).`);
+      setSelectedIds([]);
+    } catch { setBulkStatus("L’archivage groupé a échoué."); }
+    finally { setBulkBusy(false); }
+  }
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -184,20 +226,34 @@ export default function Prospects() {
           <input type="checkbox" style={{ width: "auto" }} checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
           Afficher les archivés
         </label>
-        <button onClick={handleEnrichPhones} disabled={checkingPhones} style={{ marginLeft: "auto" }}>
+        <button onClick={() => handleEnrichPhones(false)} disabled={checkingPhones} style={{ marginLeft: "auto" }}>
           {checkingPhones ? "Recherche..." : "Enrichir les numéros de téléphone"}
         </button>
-        <button onClick={handleCheckWebsites} disabled={checkingWebsites}>
+        <button onClick={() => handleCheckWebsites(false)} disabled={checkingWebsites}>
           {checkingWebsites ? "Vérification..." : "Vérifier les sites web"}
         </button>
       </div>
       {phoneCheckStatus && <p style={{ fontSize: 13, marginTop: -8 }}>{phoneCheckStatus}</p>}
       {websiteCheckStatus && <p style={{ fontSize: 13, marginTop: -8 }}>{websiteCheckStatus}</p>}
 
+      {selectedIds.length > 0 && <div className="card bulk-actions">
+        <strong>{selectedIds.length} sélectionné{selectedIds.length > 1 ? "s" : ""}</strong>
+        <button onClick={() => handleEnrichPhones(true)} disabled={checkingPhones || bulkBusy}>Enrichir téléphones</button>
+        <button onClick={() => handleCheckWebsites(true)} disabled={checkingWebsites || bulkBusy}>Vérifier les sites</button>
+        <select defaultValue="" onChange={handleBulkStatusChange} disabled={bulkBusy}>
+          <option value="" disabled>Changer le statut…</option>
+          {PIPELINE_STATUSES.map((status) => <option key={status.id} value={status.id}>{status.label}</option>)}
+        </select>
+        <button className="danger-button" onClick={handleBulkArchive} disabled={bulkBusy}>Archiver</button>
+        <button onClick={() => setSelectedIds([])} disabled={bulkBusy}>Désélectionner</button>
+      </div>}
+      {bulkStatus && <p className="import-status">{bulkStatus}</p>}
+
       <div className="card">
         <table>
           <thead>
             <tr>
+              <th className="selection-cell"><input type="checkbox" aria-label="Sélectionner tous les prospects visibles" checked={allVisibleSelected} onChange={toggleAllVisible} /></th>
               <th>Nom</th>
               <th>Type</th>
               <th>Ville</th>
@@ -210,7 +266,8 @@ export default function Prospects() {
           </thead>
           <tbody>
             {filtered.map((p) => (
-              <tr key={p.id}>
+              <tr key={p.id} className={selectedIds.includes(p.id) ? "selected-row" : ""}>
+                <td className="selection-cell"><input type="checkbox" aria-label={`Sélectionner ${p.name}`} checked={selectedIds.includes(p.id)} onChange={() => toggleProspect(p.id)} /></td>
                 <td><Link to={`/prospects/${p.id}`}>{p.name}</Link></td>
                 <td>{ESTABLISHMENT_TYPE_OPTIONS.find((t) => t.id === p.type)?.label || p.type}</td>
                 <td>{p.city}</td>
@@ -232,7 +289,7 @@ export default function Prospects() {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={8} style={{ color: "var(--text-muted)" }}>Aucun prospect.</td></tr>
+              <tr><td colSpan={9} style={{ color: "var(--text-muted)" }}>Aucun prospect.</td></tr>
             )}
           </tbody>
         </table>
