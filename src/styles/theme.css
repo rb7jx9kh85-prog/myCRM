@@ -1,38 +1,21 @@
 /* Palette sobre AWC — outil de travail interne, priorité lisibilité/rapidité.
    Vert forêt (identité alpine) + neutres. Pas d'animation gratuite. */
 :root {
-  --bg: #f6f6f4;
-  --surface: #ffffff;
-  --border: #e2e2de;
-  --text: #1c1e1b;
-  --text-muted: #6b6f6a;
-  --accent: #24463a;
-  --accent-hover: #1a3329;
-  --accent-contrast: #ffffff;
-  --danger: #b91c1c;
-  --danger-bg: #fdecec;
-  --warning: #b45309;
-  --success: #166534;
-  --radius: 8px;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #16181a;
-    --surface: #1f2225;
-    --border: #2c2f33;
-    --text: #eceeec;
-    --text-muted: #9a9d9a;
-    --accent: #5fae8f;
-    --accent-hover: #7ac2a4;
-    --accent-contrast: #0e1210;
-    --danger: #f87171;
-    --danger-bg: #3a1c1c;
-    --warning: #f0b155;
-    --success: #4ade80;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-  }
+  --bg: #071225;
+  --surface: #0d1b36;
+  --surface-strong: #101f40;
+  --border: rgba(143, 172, 255, 0.2);
+  --text: #f4f7ff;
+  --text-muted: #a9b7d3;
+  --accent: #7595ff;
+  --accent-hover: #9bb1ff;
+  --accent-contrast: #071225;
+  --danger: #ff8792;
+  --danger-bg: rgba(197, 64, 82, 0.18);
+  --warning: #f3bf62;
+  --success: #70d7ff;
+  --radius: 12px;
+  --shadow: 0 16px 42px rgba(0, 5, 20, 0.34);
 }
 
 * { box-sizing: border-box; }
@@ -43,7 +26,10 @@ html, body, #root {
 
 body {
   margin: 0;
-  background: var(--bg);
+  background:
+    radial-gradient(900px 620px at 8% -10%, rgba(83, 110, 255, 0.28), transparent 62%),
+    radial-gradient(800px 540px at 92% 4%, rgba(48, 91, 179, 0.26), transparent 58%),
+    var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 15px;
@@ -96,7 +82,7 @@ label {
 }
 
 .card {
-  background: var(--surface);
+  background: rgba(13, 27, 54, 0.82);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -122,8 +108,9 @@ label {
 .app-nav {
   width: 200px;
   flex-shrink: 0;
-  background: var(--surface);
+  background: rgba(8, 21, 46, 0.78);
   border-right: 1px solid var(--border);
+  backdrop-filter: blur(18px);
   padding: 16px 8px;
 }
 
@@ -136,7 +123,7 @@ label {
   font-size: 14px;
   margin-bottom: 2px;
 }
-.app-nav a.active, .app-nav a:hover { background: var(--bg); color: var(--accent); }
+.app-nav a.active, .app-nav a:hover { background: rgba(117, 149, 255, 0.16); color: #c8d4ff; }
 
 .app-main {
   flex: 1;

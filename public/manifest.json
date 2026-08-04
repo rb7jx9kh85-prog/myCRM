@@ -1,14 +1,14 @@
 {
-  "name": "AWC CRM",
-  "short_name": "AWC CRM",
+  "name": "Alpinia CRM",
+  "short_name": "Alpinia CRM",
   "description": "CRM interne Alpinia Web Craft — prospection et pipeline",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f6f6f4",
-  "theme_color": "#24463a",
+  "background_color": "#071225",
+  "theme_color": "#071225",
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/icons/alpinia-crm.svg", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/alpinia-crm.svg", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/alpinia-crm.svg", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
