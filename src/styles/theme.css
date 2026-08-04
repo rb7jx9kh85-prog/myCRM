@@ -1,21 +1,22 @@
 /* Palette sobre AWC — outil de travail interne, priorité lisibilité/rapidité.
    Vert forêt (identité alpine) + neutres. Pas d'animation gratuite. */
 :root {
-  --bg: #071225;
-  --surface: #0d1b36;
-  --surface-strong: #101f40;
-  --border: rgba(143, 172, 255, 0.2);
-  --text: #f4f7ff;
-  --text-muted: #a9b7d3;
-  --accent: #7595ff;
-  --accent-hover: #9bb1ff;
-  --accent-contrast: #071225;
-  --danger: #ff8792;
-  --danger-bg: rgba(197, 64, 82, 0.18);
-  --warning: #f3bf62;
-  --success: #70d7ff;
+  --bg: #090b10;
+  --surface: #20242c;
+  --surface-strong: #272c35;
+  --border: #3c424d;
+  --text: #f7f7f8;
+  --text-muted: #9fa5b0;
+  --accent: #ff7043;
+  --accent-hover: #ff875f;
+  --accent-contrast: #0b0c10;
+  --link: #6ea8ff;
+  --danger: #ff7d87;
+  --danger-bg: rgba(211, 58, 75, 0.17);
+  --warning: #f2b84b;
+  --success: #3bd4a0;
   --radius: 12px;
-  --shadow: 0 16px 42px rgba(0, 5, 20, 0.34);
+  --shadow: 0 16px 42px rgba(0, 0, 0, 0.38);
 }
 
 * { box-sizing: border-box; }
@@ -27,8 +28,8 @@ html, body, #root {
 body {
   margin: 0;
   background:
-    radial-gradient(900px 620px at 8% -10%, rgba(83, 110, 255, 0.28), transparent 62%),
-    radial-gradient(800px 540px at 92% 4%, rgba(48, 91, 179, 0.26), transparent 58%),
+    radial-gradient(860px 520px at 94% -8%, rgba(28, 62, 125, 0.28), transparent 62%),
+    radial-gradient(620px 420px at 5% 0%, rgba(255, 112, 67, 0.08), transparent 68%),
     var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -36,7 +37,7 @@ body {
   line-height: 1.45;
 }
 
-a { color: var(--accent); }
+a { color: var(--link); }
 
 button {
   font-family: inherit;
@@ -82,7 +83,7 @@ label {
 }
 
 .card {
-  background: rgba(13, 27, 54, 0.82);
+  background: rgba(32, 36, 44, 0.94);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -108,7 +109,7 @@ label {
 .app-nav {
   width: 200px;
   flex-shrink: 0;
-  background: rgba(8, 21, 46, 0.78);
+  background: rgba(10, 12, 17, 0.92);
   border-right: 1px solid var(--border);
   backdrop-filter: blur(18px);
   padding: 16px 8px;
@@ -123,7 +124,7 @@ label {
   font-size: 14px;
   margin-bottom: 2px;
 }
-.app-nav a.active, .app-nav a:hover { background: rgba(117, 149, 255, 0.16); color: #c8d4ff; }
+.app-nav a.active, .app-nav a:hover { background: rgba(255, 112, 67, 0.12); color: #ff9b7b; }
 
 .app-main {
   flex: 1;

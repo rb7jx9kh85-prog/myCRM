@@ -1,17 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Alpinia CRM">
   <defs>
     <linearGradient id="storm" x1="42" y1="28" x2="466" y2="484" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0b1b3d"/>
-      <stop offset=".54" stop-color="#1f3d7b"/>
-      <stop offset="1" stop-color="#6c7df0"/>
+      <stop stop-color="#090b10"/>
+      <stop offset=".54" stop-color="#16243d"/>
+      <stop offset="1" stop-color="#ff7043"/>
     </linearGradient>
     <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(123 92) rotate(48) scale(334)">
-      <stop stop-color="#96b4ff" stop-opacity=".72"/>
-      <stop offset="1" stop-color="#96b4ff" stop-opacity="0"/>
+      <stop stop-color="#4f7bd9" stop-opacity=".54"/>
+      <stop offset="1" stop-color="#4f7bd9" stop-opacity="0"/>
     </radialGradient>
   </defs>
   <rect width="512" height="512" rx="112" fill="url(#storm)"/>
   <rect width="512" height="512" rx="112" fill="url(#glow)"/>
   <path d="M114 378 256 112l142 266h-62l-28-59h-104l-28 59h-64Zm118-112h48l-24-51-24 51Z" fill="#fff"/>
-  <circle cx="382" cy="142" r="21" fill="#f4c56b"/>
+  <circle cx="382" cy="142" r="21" fill="#ff7043"/>
 </svg>
