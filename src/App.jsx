@@ -12,6 +12,7 @@ import Suggestions from "./pages/Suggestions";
 import Tasks from "./pages/Tasks";
 import Settings from "./pages/Settings";
 import Agent from "./pages/Agent";
+import Leads from "./pages/Leads";
 
 function PrivateRoutes() {
   const { user, loading } = useAuth();
@@ -31,6 +32,7 @@ export default function App() {
             <Route path="/prospects" element={<Prospects />} />
             <Route path="/prospects/nouveau" element={<ProspectDetail />} />
             <Route path="/prospects/:id" element={<ProspectDetail />} />
+            <Route path="/leads" element={<Leads />} />
             <Route path="/recherche" element={<Search />} />
             <Route path="/cold-call" element={<ColdCall />} />
             <Route path="/planning" element={<Planning />} />
