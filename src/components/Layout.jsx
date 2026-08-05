@@ -5,6 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 const LINKS = [
   { to: "/", label: "Accueil", icon: "⌂", end: true },
   { to: "/prospects", label: "Prospects", icon: "◎" },
+  { to: "/leads", label: "Gestion des leads", icon: "◈" },
   { to: "/recherche", label: "Recherche", icon: "⌕" },
   { to: "/cold-call", label: "Cold call", icon: "◉" },
   { to: "/planning", label: "Planning", icon: "□" },
@@ -13,7 +14,7 @@ const LINKS = [
   { to: "/agent", label: "Agent IA", icon: "✦", featured: true },
   { to: "/reglages", label: "Réglages", icon: "⚙" },
 ];
-const MOBILE_LINKS = new Set(["/", "/prospects", "/agent", "/taches"]);
+const MOBILE_LINKS = new Set(["/", "/prospects", "/leads", "/taches"]);
 
 export default function Layout() {
   const { logout } = useAuth();
@@ -65,8 +66,8 @@ export default function Layout() {
       </main>
 
       {moreOpen && (
-        <div className="mobile-more-backdrop" onClick={() => setMoreOpen(false)}>
-          <div className="mobile-more-sheet" onClick={(event) => event.stopPropagation()}>
+        <div className="mobile-more-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setMoreOpen(false); }}>
+          <div className="mobile-more-sheet">
             <div className="mobile-sheet-handle" />
             <div className="mobile-more-grid">
               {LINKS.filter((link) => !MOBILE_LINKS.has(link.to)).map((link) => renderLink(link, "mobile-more-link"))}
