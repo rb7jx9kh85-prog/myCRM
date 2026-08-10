@@ -54,6 +54,7 @@ export default function Agent() {
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [autoApply, setAutoApply] = useState(false);
   const [message, setMessage] = useState("");
 
   async function handleFile(event) {
@@ -84,8 +85,17 @@ export default function Agent() {
       const preparedFile = prepareTextFile(file, fileText, instruction);
       const data = await apiRequest({
         instruction,
+        direct: autoApply,
         ...(preparedFile ? { fileText: preparedFile } : {}),
       });
+      if (data.executed) {
+        setMessage(`${data.results.length} action(s) appliquée(s) directement dans le CRM.`);
+        setInstruction("");
+        setFile(null);
+        setFileText("");
+        setPlan(null);
+        return;
+      }
       setPlan(data);
       if (!data.actions.length) setMessage(data.summary);
     } catch (error) {
@@ -151,6 +161,10 @@ export default function Agent() {
             {loading ? "Analyse en cours…" : "Préparer les actions"}
           </button>
         </div>
+        <label className="agent-direct-toggle">
+          <input type="checkbox" style={{ width: "auto" }} checked={autoApply} onChange={(event) => setAutoApply(event.target.checked)} />
+          Appliquer directement les changements réversibles après l’analyse
+        </label>
         <p className="agent-hint"><strong>Aucun fichier requis.</strong> Si utile, joins un CSV, TXT, JSON ou Markdown jusqu’à 2 Mo.</p>
       </form>
 
@@ -177,7 +191,10 @@ export default function Agent() {
               <h2>Plan proposé</h2>
               <p className="muted">{plan.summary}</p>
             </div>
-            <span className="badge neutral">{plan.actions.length} action(s)</span>
+            <div className="cluster">
+              {plan.agents?.length > 0 && <span className="badge neutral">{plan.agents.length} sous-agent(s)</span>}
+              <span className="badge neutral">{plan.actions.length} action(s)</span>
+            </div>
           </div>
           <div className="stack">
             {plan.actions.map((action, index) => (

@@ -98,6 +98,60 @@ function estimateCostUsd(inputText, maxOutputTokens) {
   return (inputTokens / 1_000_000) * inputRate + (maxOutputTokens / 1_000_000) * outputRate;
 }
 
+async function requestOpenAI({ model, input, tools = [], maxOutputTokens }) {
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      reasoning: { effort: "medium" },
+      max_output_tokens: maxOutputTokens,
+      ...(tools.length ? { tools } : {}),
+      input,
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    const error = new Error(data.error?.message || "OpenAI n’a pas pu répondre.");
+    error.statusCode = 502;
+    throw error;
+  }
+  return data;
+}
+
+async function runResearchAgents(instruction, state, model) {
+  const roles = [
+    "Auditeur web : vérifie les sites officiels, leur accessibilité actuelle, les horaires publiés et les signes d’un site ancien ou moderne.",
+    "Qualificateur commercial : vérifie les informations publiques utiles (Google, avis, activité, présence sociale) et estime si le prospect correspond à l’ICP Alpinia.",
+  ];
+  const stateText = JSON.stringify(state).slice(0, 120000);
+  const reports = await Promise.all(roles.map(async (role) => {
+    const data = await requestOpenAI({
+      model,
+      maxOutputTokens: 700,
+      tools: [{ type: "web_search" }],
+      input: `Tu es un sous-agent de recherche web spécialisé. ${role}
+Travaille uniquement à partir de sources publiques actuelles. Ne modifie aucune donnée et ne fabrique jamais de faits.
+Instruction principale : ${instruction}
+État des prospects à examiner : ${stateText}
+Retourne un rapport court en français avec le nom, l’id, les faits vérifiés, les incertitudes et les URLs consultées.`,
+    });
+    return {
+      role,
+      report: extractOutputText(data).slice(0, 8000),
+      sources: extractSources(data),
+    };
+  }));
+  return {
+    context: reports.map((item) => `SOUS-AGENT : ${item.role}\n${item.report}`).join("\n\n"),
+    sources: reports.flatMap((item) => item.sources),
+    agents: reports.map((item) => ({ role: item.role, report: item.report })),
+  };
+}
+
 function historySafe(value) {
   if (value === undefined) return null;
   if (value === null || typeof value !== "object") return value;
@@ -185,15 +239,28 @@ Règles :
 - N’efface jamais de données sans demande explicite. Si l’instruction est ambiguë, propose zéro action et explique-le dans summary.
 - Date actuelle : ${new Date().toISOString().slice(0, 10)}.`;
 
+  const model = process.env.CRM_AGENT_MODEL || process.env.OPENAI_MODEL || "gpt-5.6-terra";
+  const researchRequested = /sous.?agents?|multi.?agent|scrap|scrape|plusieurs recherches|lance.*agent/i.test(instruction);
+  const researchCost = researchRequested
+    ? estimateCostUsd(`${system}\n${JSON.stringify(state)}`, 700) * 2
+    : 0;
+  const maxCost = Number(process.env.CRM_AGENT_MAX_USD || 0.2);
+  if (researchCost > maxCost) {
+    const error = new Error(`La recherche multi-agent dépasserait la limite estimée de ${maxCost.toFixed(2)} $. Réduis le nombre de prospects.`);
+    error.statusCode = 402;
+    throw error;
+  }
+  const research = researchRequested ? await runResearchAgents(instruction, state, model) : { context: "", sources: [], agents: [] };
+
   const user = `INSTRUCTION :
 ${instruction}
 
 ÉTAT CRM :
-${JSON.stringify(state)}${fileText ? `\n\nCONTENU DU FICHIER FOURNI :\n${fileText}` : "\n\nAUCUN FICHIER FOURNI : traite l’instruction uniquement avec l’état du CRM."}`;
+${JSON.stringify(state)}${fileText ? `\n\nCONTENU DU FICHIER FOURNI :\n${fileText}` : "\n\nAUCUN FICHIER FOURNI : traite l’instruction uniquement avec l’état du CRM."}
+${research.context ? `\n\nRAPPORTS DES SOUS-AGENTS WEB :\n${research.context}` : ""}`;
 
   const maxOutputTokens = 1800;
-  const estimatedCost = estimateCostUsd(`${system}\n${user}`, maxOutputTokens);
-  const maxCost = Number(process.env.CRM_AGENT_MAX_USD || 0.2);
+  const estimatedCost = researchCost + estimateCostUsd(`${system}\n${user}`, maxOutputTokens);
   if (estimatedCost > maxCost) {
     const error = new Error(`Cette requête dépasserait la limite estimée de ${maxCost.toFixed(2)} $. Réduis l’instruction ou le fichier.`);
     error.statusCode = 402;
@@ -202,32 +269,21 @@ ${JSON.stringify(state)}${fileText ? `\n\nCONTENU DU FICHIER FOURNI :\n${fileTex
 
   const browseRequested = /\b(site|internet|web|google|ouvert|ouverture|actif|en ligne|vérif|vérifie|recherche|cherche|avis|horaires|actualité)\b/i.test(instruction);
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: process.env.CRM_AGENT_MODEL || process.env.OPENAI_MODEL || "gpt-5.6-terra",
-      reasoning: { effort: "medium" },
-      max_output_tokens: maxOutputTokens,
-      ...(browseRequested ? { tools: [{ type: "web_search" }] } : {}),
-      input: [
-        { role: "system", content: [{ type: "input_text", text: system }] },
-        { role: "user", content: [{ type: "input_text", text: user }] },
-      ],
-    }),
+  const data = await requestOpenAI({
+    model,
+    maxOutputTokens,
+    tools: browseRequested ? [{ type: "web_search" }] : [],
+    input: [
+      { role: "system", content: [{ type: "input_text", text: system }] },
+      { role: "user", content: [{ type: "input_text", text: user }] },
+    ],
   });
-
-  const data = await response.json();
-  if (!response.ok) {
-    const error = new Error(data.error?.message || "OpenAI n’a pas pu préparer le plan.");
-    error.statusCode = 502;
-    throw error;
-  }
   try {
-    return { ...parsePlan(extractOutputText(data)), sources: extractSources(data) };
+    return {
+      ...parsePlan(extractOutputText(data)),
+      sources: [...research.sources, ...extractSources(data)].filter((source, index, all) => all.findIndex((item) => item.url === source.url) === index).slice(0, 30),
+      agents: research.agents,
+    };
   } catch (cause) {
     const error = new Error(cause.message || "L’agent n’a pas renvoyé un plan exploitable.");
     error.statusCode = 502;
@@ -409,7 +465,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Méthode non autorisée." });
   try {
     await requireUser(req);
-    const { instruction, fileText, execute, actions } = req.body || {};
+    const { instruction, fileText, execute, direct, actions } = req.body || {};
     if (execute) {
       const results = await executeActions(Array.isArray(actions) ? actions : []);
       return res.status(200).json({ success: true, results });
@@ -418,6 +474,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Écris une instruction pour l’agent." });
     }
     const plan = await buildPlan(String(instruction).slice(0, 8000), String(fileText || "").slice(0, 300000));
+    if (direct && plan.actions.length) {
+      const results = await executeActions(plan.actions);
+      return res.status(200).json({ ...plan, executed: true, results });
+    }
     return res.status(200).json(plan);
   } catch (error) {
     return sendApiError(res, error);
