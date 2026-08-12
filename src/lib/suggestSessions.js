@@ -25,7 +25,7 @@ function findNextSlot(window, usedSlots) {
 // Propose des sessions de cold call groupées par type d'établissement, sur
 // les créneaux jugés les plus favorables (src/config/callingWindows.js).
 // Ne modifie rien en base — c'est à l'utilisateur de valider chaque
-// suggestion pour la transformer en vraie session (voir Planning/Suggestions).
+// suggestion pour la transformer en vraie session (voir Agenda/Suggestions).
 export function suggestSessions(prospects, existingSessions) {
   const alreadyPlanned = new Set(existingSessions.flatMap((s) => s.prospectIds || []));
   const usedSlots = new Set(existingSessions.map((s) => `${s.date}_${s.startTime}`));

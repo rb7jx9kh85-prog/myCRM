@@ -4,6 +4,7 @@ import { subscribeProspects } from "../lib/prospects";
 import { subscribeSessions } from "../lib/sessions";
 import { subscribeTasks } from "../lib/tasks";
 import { PIPELINE_STATUSES } from "../config/pipeline";
+import PushNotificationBanner from "../components/PushNotificationBanner";
 
 export default function Dashboard() {
   const [prospects, setProspects] = useState([]);
@@ -36,6 +37,8 @@ export default function Dashboard() {
     <div>
       <h1>Tableau de bord</h1>
 
+      <PushNotificationBanner />
+
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
         {PIPELINE_STATUSES.map((s) => (
           <div key={s.id} className="card" style={{ minWidth: 130 }}>
@@ -63,7 +66,7 @@ export default function Dashboard() {
               {s.date} à {s.startTime} — {s.prospectIds?.length || 0} prospects
             </div>
           ))}
-          {upcomingSessions.length === 0 && <p style={{ color: "var(--text-muted)" }}>Aucune session planifiée. <Link to="/planning">Planifier</Link></p>}
+          {upcomingSessions.length === 0 && <p style={{ color: "var(--text-muted)" }}>Aucune session planifiée. <Link to="/agenda">Planifier</Link></p>}
         </div>
 
         <div className="card" style={{ flex: 1, minWidth: 280 }}>

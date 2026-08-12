@@ -52,4 +52,10 @@ export const NOTIFICATION_TRIGGERS = [
     defaultEnabled: true,
     params: { days: 7 },
   },
+  {
+    id: "tasksDueToday",
+    label: "Tâches de l'agenda prévues aujourd'hui (dont récurrentes)",
+    defaultEnabled: true,
+    params: {},
+  },
 ];

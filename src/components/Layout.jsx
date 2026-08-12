@@ -6,7 +6,7 @@ const LINKS = [
   { to: "/prospects", label: "Prospects" },
   { to: "/recherche", label: "Recherche" },
   { to: "/cold-call", label: "Cold call" },
-  { to: "/planning", label: "Planning" },
+  { to: "/agenda", label: "Agenda" },
   { to: "/suggestions", label: "Suggestions" },
   { to: "/taches", label: "Tâches" },
   { to: "/reglages", label: "Réglages" },

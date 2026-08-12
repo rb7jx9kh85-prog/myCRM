@@ -115,7 +115,7 @@ export default function Suggestions() {
               >
                 {created[s.key] ? "Session créée" : creating[s.key] ? "Création..." : "Créer cette session"}
               </button>
-              {created[s.key] && <button onClick={() => navigate("/planning")}>Voir le planning</button>}
+              {created[s.key] && <button onClick={() => navigate("/agenda")}>Voir l'agenda</button>}
             </div>
           </div>
 

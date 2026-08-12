@@ -4,7 +4,7 @@
 // utilisé par l'enrichissement de recherche.
 import { buildSystemPrompt } from "../../src/config/icpProfile.js";
 
-const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const MODEL = process.env.OPENAI_MODEL || "gpt-5.6-luna";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();

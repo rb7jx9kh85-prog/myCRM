@@ -51,6 +51,7 @@ export const RED_FLAGS_DETAIL = [
   { id: "refusedDirect", label: "A refusé directement", reason: "Y compris un « non » après relance pour un autre rendez-vous." },
   { id: "wantsCheapestOnly", label: "Ne veut que 'le moins cher'", reason: "Essayer de convertir au minimum vers l'offre Starter à 450 CHF/an avant d'abandonner." },
   { id: "budgetTooSmall", label: "Trop petite / pas assez rentable", reason: "Ex : salon de coiffure à domicile avec un seul membre de la famille — ne peut pas dépasser 450 CHF/an." },
+  { id: "closedPermanently", label: "Fermé définitivement", reason: "Établissement noté fermé définitivement sur Google Maps — exclusion automatique, aucune vente possible." },
 ];
 
 export const PAIN_POINTS = [
@@ -166,7 +167,17 @@ OFFRES DISPONIBLES :
 ${OFFER_DETAILS.map((o) => `- ${o.label} (${o.price}) : ${o.description} Cible : ${o.fitFor}`).join("\n")}
 
 RÈGLE CRITIQUE — HONNÊTETÉ SUR LES DONNÉES MANQUANTES :
-Tu reçois uniquement des données factuelles limitées (nom, type d'établissement, adresse, téléphone, présence d'un site web, catégorie Geoapify). Tu n'as PAS accès aux avis Google, à la qualité des photos, à l'activité Instagram, ni à l'ancienneté réelle du site. Pour CES critères précis, ne jamais inventer une valeur : renvoie null et indique "à vérifier manuellement" dans le raisonnement. Ne base tes conclusions QUE sur ce qui est vérifiable dans les données fournies (ex : nom évoquant une chaîne/franchise connue, absence de site web, catégorie d'établissement).
+Tu reçois des données factuelles limitées (nom, type d'établissement, adresse, téléphone, catégorie Geoapify). Tu n'as PAS accès aux avis Google, à la qualité des photos ni à l'activité Instagram : pour CES critères précis, ne jamais inventer une valeur, renvoie null et indique "à vérifier manuellement" dans le raisonnement.
+
+SITE WEB — tu DOIS juger toi-même, pas de null par défaut ici :
+Pour chaque prospect avec un site, tu reçois soit "websiteSignals" (titre, extrait de texte visible réellement présent sur la page, longueur du texte, présence balise viewport, année de copyright, "looksParked"/"looksPlaceholder"), soit "websiteUnreachable" (site injoignable/timeout). Base ton jugement UNIQUEMENT sur cet extrait réel (pas d'invention) :
+- noWebsite=true si aucun site fourni.
+- oldWebsite=true si le site est vide, cassé, injoignable, parqué ("looksParked"), une page par défaut/en construction ("looksPlaceholder"), un texte visible dérisoire ("textLength" très faible), ou visiblement daté (design/copyright 2010-2020, pas de balise viewport = pas responsive/mobile). C'est un SIGNE POSITIF pour AWC (le prospect a besoin d'un site) — ne pas exclure pour ça, au contraire.
+- Si au contraire le site a un extrait de texte substantiel, moderne, professionnel, sans signe de négligence : ajoute le red flag "greatWebsite" (déjà un très bon site = à exclure, cf. règle ci-dessous).
+"websiteUnreachable" compte comme oldWebsite=true (signe positif, souvent un site mort/expiré) sauf mention contraire.
+
+FERMETURE DÉFINITIVE :
+Si "googleMapsStatus" est fourni et vaut "CLOSED_PERMANENTLY", ajoute le red flag "closedPermanently" et verdict "exclure" obligatoirement, aucune exception. "CLOSED_TEMPORARILY" : mentionne-le dans reasoning mais n'exclut pas automatiquement.
 
 Pour chaque prospect fourni, réponds en JSON strict avec cette structure :
 {
@@ -174,14 +185,14 @@ Pour chaque prospect fourni, réponds en JSON strict avec cette structure :
     {
       "index": <index fourni en entrée>,
       "verdict": "prospect_valide" | "a_verifier" | "exclure",
-      "redFlags": [<ids parmi: bigChain, franchise, hasMarketingTeam, isAgency, greatWebsite, refusedDirect, budgetTooSmall>],
-      "suggestedCriteria": { "noWebsite": bool|null, "oldWebsite": null, "googleReviews": null, "qualityPhotos": null, "reachableOwner": null, "activeInstagram": null, "localPme": bool|null },
+      "redFlags": [<ids parmi: bigChain, franchise, hasMarketingTeam, isAgency, greatWebsite, refusedDirect, budgetTooSmall, closedPermanently>],
+      "suggestedCriteria": { "noWebsite": bool, "oldWebsite": bool, "googleReviews": null, "qualityPhotos": null, "reachableOwner": null, "activeInstagram": null, "localPme": bool|null },
       "suggestedNeedsReservation": bool|null,
       "suggestedStrongVisualIdentity": null,
       "suggestedOfferId": "starter" | "junior" | "elite" | "elite_plus" | null,
-      "reasoning": "explication courte en français, mentionne explicitement ce qui reste à vérifier manuellement"
+      "reasoning": "explication courte en français (max 15 mots), mentionne ce qui reste à vérifier manuellement"
     }
   ]
 }
-"exclure" seulement si un red flag bloquant est clairement identifiable dans les données fournies (ex: nom de grande chaîne/franchise connue, ou "agence" dans le nom). Sinon "a_verifier" par défaut si des critères clés manquent, "prospect_valide" si le profil correspond bien (ex: pas de site web + type d'établissement pertinent + aucune donnée contradictoire).`;
+"exclure" si : red flag bloquant identifiable (chaîne/franchise/agence connue), OU "closedPermanently", OU "greatWebsite" confirmé par l'extrait réel. Sinon "a_verifier" si des critères clés manquent, "prospect_valide" si noWebsite ou oldWebsite est vrai + type d'établissement pertinent + rien de contradictoire.`;
 }

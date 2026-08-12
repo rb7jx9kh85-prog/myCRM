@@ -17,6 +17,7 @@ export const SCORING_CRITERIA = [
   { id: "bigChain", label: "Grande chaîne / franchise", points: -40, manual: true },
   { id: "greatWebsite", label: "Très bon site déjà existant", points: -50, manual: true },
   { id: "refusedDirect", label: 'A déjà refusé clairement ("non" direct)', points: -100, manual: true },
+  { id: "closedPermanently", label: "Fermé définitivement (Google Maps)", points: -1000, manual: false },
 ];
 
 // Red flags : affichés en badge rouge "À exclure" dans l'UI.
@@ -31,8 +32,9 @@ export const RED_FLAGS = [
   { id: "greatWebsite", label: "Très bon site déjà existant" },
   { id: "refusedDirect", label: "Refus direct déjà exprimé" },
   { id: "budgetTooSmall", label: "Trop petit pour dépasser 450 CHF/an" },
+  { id: "closedPermanently", label: "Fermé définitivement (Google Maps)" },
 ];
 
 // Champs booléens additionnels utilisés uniquement pour détecter les red
 // flags qui ne correspondent pas déjà à un critère de score ci-dessus.
-export const EXTRA_RED_FLAG_FIELDS = ["franchise", "hasMarketingTeam", "isAgency", "budgetTooSmall"];
+export const EXTRA_RED_FLAG_FIELDS = ["franchise", "hasMarketingTeam", "isAgency", "budgetTooSmall", "closedPermanently"];

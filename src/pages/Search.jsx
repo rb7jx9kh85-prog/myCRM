@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createProspect } from "../lib/prospects";
 import { CANTONS, ESTABLISHMENT_TYPE_OPTIONS } from "../config/pipeline";
 
@@ -6,6 +6,17 @@ const VERDICT_LABELS = {
   prospect_valide: { label: "Recommandé", cls: "success" },
   a_verifier: { label: "À vérifier", cls: "neutral" },
   exclure: { label: "À exclure", cls: "danger" },
+};
+
+const RED_FLAG_LABELS = {
+  bigChain: "Grande chaîne",
+  franchise: "Franchise",
+  hasMarketingTeam: "Équipe marketing",
+  isAgency: "Agence",
+  greatWebsite: "Déjà un très bon site",
+  refusedDirect: "Refus déjà exprimé",
+  budgetTooSmall: "Budget trop petit",
+  closedPermanently: "Fermé définitivement",
 };
 
 export default function Search() {
@@ -18,6 +29,13 @@ export default function Search() {
   const [enrichError, setEnrichError] = useState("");
   const [imported, setImported] = useState({});
   const [importingAll, setImportingAll] = useState(false);
+  const [hideExcluded, setHideExcluded] = useState(true);
+  const [googleMapsChecked, setGoogleMapsChecked] = useState(null);
+
+  const visibleResults = useMemo(
+    () => (hideExcluded ? results.filter((r) => r.ai?.verdict !== "exclure") : results),
+    [results, hideExcluded]
+  );
 
   async function handleSearch(e) {
     e.preventDefault();
@@ -78,6 +96,7 @@ export default function Search() {
         setEnrichError(data.error);
         return;
       }
+      setGoogleMapsChecked(data.googleMapsChecked ?? false);
       setResults((prev) => prev.map((r, i) => {
         const match = data.results.find((x) => x.index === i);
         return match ? { ...r, ai: match } : r;
@@ -163,9 +182,13 @@ export default function Search() {
           <button className="primary" onClick={handleImportAllRecommended} disabled={importingAll || enriching}>
             {importingAll ? "Import en cours..." : "Importer tous les recommandés"}
           </button>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+            <input type="checkbox" style={{ width: "auto" }} checked={hideExcluded} onChange={(e) => setHideExcluded(e.target.checked)} />
+            Masquer les exclus ({results.filter((r) => r.ai?.verdict === "exclure").length})
+          </label>
           <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
-            L'IA analyse et cible automatiquement après chaque recherche : verdict, critères et offre recommandée
-            (avis Google, photos, Instagram restent à vérifier manuellement).
+            L'IA visite chaque site (extrait réel du contenu) et juge s'il est vide/cassé/dépassé — filtre
+            automatiquement fermetures définitives{googleMapsChecked === false ? " (statut Google Maps non vérifié — GOOGLE_PLACES_API_KEY manquante)" : ""} et sites déjà excellents.
           </span>
           {enrichError && <span style={{ fontSize: 13, color: "var(--danger)" }}>{enrichError}</span>}
         </div>
@@ -185,7 +208,7 @@ export default function Search() {
             </tr>
           </thead>
           <tbody>
-            {results.map((r) => (
+            {visibleResults.map((r) => (
               <tr key={r.id}>
                 <td>{r.name}</td>
                 <td>{r.city}</td>
@@ -193,9 +216,16 @@ export default function Search() {
                 <td>{r.website ? <a href={r.website} target="_blank" rel="noreferrer">lien</a> : <span className="badge success">Pas de site (+30)</span>}</td>
                 <td>
                   {r.ai ? (
-                    <span className={`badge ${VERDICT_LABELS[r.ai.verdict]?.cls || "neutral"}`} title={r.ai.reasoning}>
-                      {VERDICT_LABELS[r.ai.verdict]?.label || r.ai.verdict}
-                    </span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      <span className={`badge ${VERDICT_LABELS[r.ai.verdict]?.cls || "neutral"}`} title={r.ai.reasoning}>
+                        {VERDICT_LABELS[r.ai.verdict]?.label || r.ai.verdict}
+                      </span>
+                      {r.ai.redFlags?.length > 0 && (
+                        <span style={{ fontSize: 11, color: "var(--danger)" }}>
+                          {r.ai.redFlags.map((f) => RED_FLAG_LABELS[f] || f).join(", ")}
+                        </span>
+                      )}
+                    </div>
                   ) : enriching ? (
                     <span style={{ color: "var(--text-muted)", fontSize: 13 }}>Analyse...</span>
                   ) : (
@@ -210,8 +240,10 @@ export default function Search() {
                 </td>
               </tr>
             ))}
-            {results.length === 0 && !loading && (
-              <tr><td colSpan={7} style={{ color: "var(--text-muted)" }}>Lance une recherche pour voir des résultats.</td></tr>
+            {visibleResults.length === 0 && !loading && (
+              <tr><td colSpan={7} style={{ color: "var(--text-muted)" }}>
+                {results.length > 0 ? "Tous les résultats sont exclus (décoche « Masquer les exclus » pour les voir)." : "Lance une recherche pour voir des résultats."}
+              </td></tr>
             )}
           </tbody>
         </table>
